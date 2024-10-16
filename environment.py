@@ -59,16 +59,26 @@ class Environment:
         # Get the current hour's energy price, ensuring we match the format exactly
         current_hour = self.date.replace(minute=0, second=0, microsecond=0)
         
-        # Localize to the correct timezone, which in this case is UTC+1
-        current_hour = current_hour.tz_localize('UTC+01:00')  # Adjust timezone as necessary
-        
-        # Look up the price using the correctly formatted timestamp
-        price = self.energy_prices.get(current_hour, None)
+        # Try to get the price with UTC+1
+        current_hour_utc1 = current_hour.tz_localize('UTC+01:00')
+        price = self.energy_prices.get(current_hour_utc1, None)
         
         if price is None:
-            print(f"Looking for energy price at {current_hour.isoformat()}")  # This will output in the desired format
-        
+            print(f"Looking for energy price at {current_hour_utc1.isoformat()} - not found, trying UTC+2")
+            # Try to get the price with UTC+2 if the first attempt fails
+            current_hour_utc2 = current_hour.tz_localize('UTC+02:00')
+            price = self.energy_prices.get(current_hour_utc2, None)
+
+            if price is not None:
+                print(f"Found energy price at {current_hour_utc2.isoformat()}")
+            else:
+                print(f"Looking for energy price at {current_hour_utc2.isoformat()} - not found")
+
+        else:
+            print(f"Found energy price at {current_hour_utc1.isoformat()}")
+
         return price
+
 
     def update_time(self, new_time):
         """Update the current time and optionally update any other state."""
@@ -97,7 +107,7 @@ if __name__ == "__main__":
 
     # Update for each hour of the year 2015
     current_date = env.date
-    end_date = pd.to_datetime('2015-01-05 23:00:00')  # End of the year
+    end_date = pd.to_datetime('2015-08-05 23:00:00')  # End of the year
 
     while current_date <= end_date:
         # Update the agent's price and take action
