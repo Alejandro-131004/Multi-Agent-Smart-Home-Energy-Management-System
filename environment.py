@@ -36,11 +36,11 @@ class Environment:
             
             # Normaliza ambas as datas para garantir que a comparação seja feita apenas até a hora exata
             self.date = self.date.normalize()
-            city_data['dt_iso'] = city_data['dt_iso'].dt.normalize()
+            city_data.loc[:, 'dt_iso'] = city_data['dt_iso'].dt.normalize()
 
             # Filtra os dados com base na data/hora normalizada
             filtered_data = city_data[city_data['dt_iso'] == self.date]
-            
+            filtered_data= filtered_data.reset_index(drop=True)
             print(f"Dados meteorológicos para {self.city} em {self.date}:")
             print(filtered_data)  # Verifique o resultado da filtragem
 
@@ -49,9 +49,9 @@ class Environment:
                 return None
 
             # Conversão de temperatura de Kelvin para Celsius
-            filtered_data.loc['temp'] -= 273.15  # Converte Kelvin para Celsius
-            filtered_data.loc['temp_min'] -= 273.15  # Converte para Celsius
-            filtered_data.loc['temp_max'] -= 273.15  # Converte para Celsius
+            filtered_data['temp'] -= 273.15  # Converte Kelvin para Celsius
+            filtered_data['temp_min'] -= 273.15  # Converte para Celsius
+            filtered_data['temp_max'] -= 273.15  # Converte para Celsius
 
             return filtered_data.iloc[0]
         except FileNotFoundError:
@@ -73,6 +73,7 @@ class Environment:
             print(f"Weather: {self.weather_data['weather_description']}")
         else:
             print("No weather data available.")
+        
 
     def load_energy_data(self):
         try:

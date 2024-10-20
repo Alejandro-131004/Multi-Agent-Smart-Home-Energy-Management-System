@@ -6,32 +6,39 @@ from agents.energy_control import EnergyAgent
 import time
 import asyncio
 
-
 async def start_agents(env):
     # Cria a instância da SolarBattery no ambiente
     solar_battery = SolarBattery(capacity_kwh=1000)
     env.solar_battery = solar_battery  # Associando a solar_battery ao ambiente
-    energy_agent = EnergyAgent("energy_agent@localhost", "password", env)  # Adicione aqui o nome e a senha adequados
-   
+    print("[DEBUG] SolarBattery foi criada e associada ao ambiente.")
+
     # Inicializa os agentes passando o ambiente para todos eles
-    heater_agent = HeaterAgent("heater@localhost", "password", env, energy_agent)  # Passa o ambiente
-    fridge_agent = FridgeAgent("fridge@localhost", "password", env)  # Passa o ambiente
-    solar_agent = SolarPanelAgent("solar@localhost", "password", env)  # Passa o ambiente
+    energy_agent = EnergyAgent("energy_agent@localhost", "password", env)
+    heater_agent = HeaterAgent("heater@localhost", "password", env, energy_agent)
+    fridge_agent = FridgeAgent("fridge@localhost", "password", env)
+    solar_agent = SolarPanelAgent("solar@localhost", "password", env.solar_battery)
+    print("[DEBUG] Todos os agentes foram inicializados.")
 
     # Adiciona os comportamentos aos agentes, passando os parâmetros necessários
-    heater_power_per_degree = 10  # Exemplo de valor, ajuste conforme necessário
+    heater_power_per_degree = 100  # Exemplo de valor, ajuste conforme necessário
     weight_dissatisfaction = 1.0  # Exemplo de valor, ajuste conforme necessário
 
     heater_agent.add_behaviour(
         HeaterAgent.HeaterBehaviour(env, energy_agent, heater_power_per_degree, weight_dissatisfaction)
     )
+    print("[DEBUG] HeaterBehaviour foi adicionado ao HeaterAgent.")
+
     fridge_agent.add_behaviour(FridgeAgent.FridgeBehaviour())
+    print("[DEBUG] FridgeBehaviour foi adicionado ao FridgeAgent.")
+
     solar_agent.add_behaviour(SolarPanelAgent.SolarBehaviour())
+    print("[DEBUG] SolarBehaviour foi adicionado ao SolarPanelAgent.")
 
     # Inicia os agentes
     await heater_agent.start()
     await fridge_agent.start()
     await solar_agent.start()
+    print("[DEBUG] Todos os agentes foram iniciados.")
 
     # Controla o tempo de execução do sistema
     start_time = time.time()

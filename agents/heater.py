@@ -8,15 +8,15 @@ class HeaterAgent(Agent):
         self.environment = environment  # Refere-se ao Environment
         self.energy_agent = energy_agent  # EnergyAgent para consultar sobre energia
         self.heating_power_per_degree = 1000  # Exemplo: 1000 LWatts por grau de aquecimento
-        self.weight_dissatisfaction = 0.8  # Peso alto devido à importância do aquecimento
+        self.base_priority = 1.0  # Prioridade base do aquecedor
 
     class HeaterBehaviour(CyclicBehaviour):
-        def __init__(self, environment, energy_agent, heating_power_per_degree, weight_dissatisfaction):
+        def __init__(self, environment, energy_agent, heating_power_per_degree, base_priority):
             super().__init__()
             self.environment = environment
             self.energy_agent = energy_agent
             self.heating_power_per_degree = heating_power_per_degree
-            self.weight_dissatisfaction = weight_dissatisfaction
+            self.base_priority = base_priority
 
         async def run(self):
             # Obtenção da temperatura interior atual
@@ -24,37 +24,40 @@ class HeaterAgent(Agent):
             desired_temp_range = (self.environment.desired_temperature - 1, 
                                   self.environment.desired_temperature + 1)
 
-            # Calcular grau de insatisfação ponderada
+            # Calcular grau de insatisfação
             if current_room_temp < desired_temp_range[0]:
-                dissatisfaction = (desired_temp_range[0] - current_room_temp) * self.weight_dissatisfaction
+                dissatisfaction = (desired_temp_range[0] - current_room_temp)
             elif current_room_temp > desired_temp_range[1]:
-                dissatisfaction = (current_room_temp - desired_temp_range[1]) * self.weight_dissatisfaction
+                dissatisfaction = (current_room_temp - desired_temp_range[1])
             else:
                 dissatisfaction = 0  # Dentro da faixa, sem insatisfação
 
-            print(f"[Aquecedor] Grau de insatisfação ponderada: {dissatisfaction}°C.")
+            # Calcular prioridade baseada na insatisfação e base_priority
+            dynamic_priority = self.calculate_priority(dissatisfaction)
+
+            print(f"[Aquecedor] Grau de insatisfação: {dissatisfaction}°C. Prioridade dinâmica: {dynamic_priority}.")
 
             if dissatisfaction > 0:
-                # Função que calcula o gasto energético necessário (LWatts) por grau de insatisfação
+                # Solicita ao EnergyAgent a energia necessária, baseado na prioridade dinâmica
                 energy_needed = self.calculate_energy_consumption(dissatisfaction)
-
-                # Solicita ao EnergyAgent a potência necessária
-                energy_power = await self.energy_agent.decide_power(energy_needed)
+                energy_power = await self.energy_agent.decide_power(energy_needed, dynamic_priority)
 
                 print(f"[Aquecedor] Potência recomendada pelo EnergyAgent: {energy_power} LWatts.")
 
                 if energy_power > 0:
-                    # Calcula quantos graus podem ser aquecidos com a energia disponível
                     degrees_heated = energy_power / self.heating_power_per_degree
-
-                    # Atualiza a temperatura interna com base na energia recebida
                     self.environment.update_room_temperature(degrees_heated)
                     print(f"[Aquecedor] A temperatura da sala foi aumentada em {degrees_heated}°C.")
                 else:
                     print(f"[Aquecedor] Sem energia disponível para aquecimento.")
 
-            # Simula uma hora de operação
             await asyncio.sleep(3600)
+
+        def calculate_priority(self, dissatisfaction):
+            """
+            Calcula a prioridade dinâmica baseada na insatisfação e na prioridade base.
+            """
+            return self.base_priority + dissatisfaction  # Exemplo simples de cálculo de prioridade
 
         def calculate_energy_consumption(self, dissatisfaction):
             """
@@ -64,5 +67,4 @@ class HeaterAgent(Agent):
 
     async def setup(self):
         print(f"[Aquecedor] Agente Aquecedor inicializado.")
-        self.add_behaviour(self.HeaterBehaviour(self.environment, self.energy_agent, self.heating_power_per_degree, self.weight_dissatisfaction))
-
+        self.add_behaviour(self.HeaterBehaviour(self.environment, self.energy_agent, self.heating_power_per_degree, self.base_priority))
