@@ -5,7 +5,7 @@ class EnergyAgent:
         self.name = name
         self.password = password
         self.environment = environment  # O ambiente é um atributo da classe
-        self.current_price = None  # Preço atual da energia da rede
+        self.current_price = 3000  # Preço atual da energia da rede
         self.energy_consumption_needed = 0.0  # Energia que os outros agentes vão precisar (em kWh)
         self.threshold_price = 0.20  # Preço limiar para o uso da energia da rede
 
@@ -28,7 +28,7 @@ class EnergyAgent:
             return energy_to_use * 1000  # Convertendo para LWatts
         else:
             print(f"{self.name}: Não há energia solar disponível.")
-
+        self.update_price()
         # Verifica o preço da rede e ajusta o fornecimento
         if self.current_price is not None and self.current_price <= self.threshold_price:
             print(f"{self.name}: Preço da rede aceitável ({self.current_price} €/kWh).")
@@ -39,5 +39,5 @@ class EnergyAgent:
 
     def update_price(self):
         """Atualiza o preço da energia da rede a partir do environment."""
-        self.current_price = self.environment.get_energy_prices()
+        self.current_price = self.environment.get_price_for_current_hour()
         print(f"{self.name}: Atualizou o preço da energia para {self.current_price} €/kWh.")
