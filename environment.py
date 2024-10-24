@@ -146,3 +146,6 @@ class Environment:
 
     def verify_season(self):
         print(f"A data {self.date.date()} corresponde à estação: {self.season}.")
+        
+    def update_room_temperature(self,degrees_heated):
+        return self.season
