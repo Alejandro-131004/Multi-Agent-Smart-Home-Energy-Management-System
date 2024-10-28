@@ -24,8 +24,8 @@ class FridgeAgent(Agent):
             print(f"[Refrigerador] Consumindo energia... Total: {self.consumption} kWh")
 
             # Enviar mensagem para o painel solar sobre o consumo
-            msg = Message(to="solar@localhost")
-            msg.body = str(self.consumption)
-            await self.send(msg)
+            #msg = Message(to="solar@localhost")
+            #msg.body = str(self.consumption)
+            #await self.send(msg)
 
             await asyncio.sleep(10)  # Corrigido para usar asyncio.sleep

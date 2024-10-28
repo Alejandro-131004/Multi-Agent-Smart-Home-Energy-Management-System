@@ -7,8 +7,9 @@ class HeaterAgent(Agent):
         super().__init__(jid, password)
         self.environment = environment  # Refere-se ao Environment
         self.energy_agent = energy_agent  # EnergyAgent para consultar sobre energia
-        self.heating_power_per_degree = 1000  # Exemplo: 1000 LWatts por grau de aquecimento
-        self.base_priority = 1.0  # Prioridade base do aquecedor
+        self.heating_power_per_degree = 1.0  # Exemplo: 1000 LWatts por grau de aquecimento
+        self.base_priority = 1.0 # Prioridade base do aquecedor
+        
 
     class HeaterBehaviour(CyclicBehaviour):
         def __init__(self, environment, energy_agent, heating_power_per_degree, base_priority):
@@ -40,6 +41,7 @@ class HeaterAgent(Agent):
             if dissatisfaction > 0:
                 # Solicita ao EnergyAgent a energia necessária, baseado na prioridade dinâmica
                 energy_needed = self.calculate_energy_consumption(dissatisfaction)
+                print("neeeeeeeeeeeeeeeeeeeeeeeed",energy_needed)
                 energy_power = await self.energy_agent.decide_power(energy_needed, dynamic_priority)
 
                 print(f"[Aquecedor] Potência recomendada pelo EnergyAgent: {energy_power} LWatts.")
@@ -50,8 +52,11 @@ class HeaterAgent(Agent):
                     print(f"[Aquecedor] A temperatura da sala foi aumentada em {degrees_heated}°C.")
                 else:
                     print(f"[Aquecedor] Sem energia disponível para aquecimento.")
+            else :
+                    print(f"Temperatura confortavel.")
+                    self.environment.decrease_temperature();        
 
-            await asyncio.sleep(3600)
+            await asyncio.sleep(10)
 
         def calculate_priority(self, dissatisfaction):
             """
@@ -61,9 +66,10 @@ class HeaterAgent(Agent):
 
         def calculate_energy_consumption(self, dissatisfaction):
             """
-            Calcula o gasto de energia (LWatts) por hora para compensar o grau de insatisfação.
+            Calcula o gasto de energia (Watts) por hora para compensar o grau de insatisfação.
             """
-            return dissatisfaction * self.heating_power_per_degree  # Exemplo: 1000 LWatts por grau de insatisfação
+            print("disati",dissatisfaction)
+            return dissatisfaction   # Exemplo: 1000 LWatts por grau de insatisfação
 
     async def setup(self):
         print(f"[Aquecedor] Agente Aquecedor inicializado.")

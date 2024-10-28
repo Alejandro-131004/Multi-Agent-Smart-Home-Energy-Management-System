@@ -46,14 +46,15 @@ class EnergyAgent():
         else:
             print("[Painel Solar] Não foi possível gerar energia solar.")
         # Ajusta a quantidade de energia alocada com base na prioridade
-        adjusted_energy_needed = energy_needed * priority
+        print(energy_needed)
+        adjusted_energy_needed = energy_needed #* priority
 
         # Se houver energia solar suficiente, aloca energia solar
         if solar_energy_available > 0:
             energy_to_use = min(solar_energy_available, adjusted_energy_needed)
             print(f"{self.name}: Vai usar {energy_to_use} kWh de energia solar.")
             self.environment.solar_battery.discharge(energy_to_use)
-            return energy_to_use * 1000  # Convertendo para LWatts
+            return energy_to_use  # Convertendo para LWatts
         else:
             print(f"{self.name}: Não há energia solar disponível.")
         self.update_price()

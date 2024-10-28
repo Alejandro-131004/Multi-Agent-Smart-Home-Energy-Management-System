@@ -14,7 +14,7 @@ class Environment:
         self.energy_prices = self.get_energy_prices()  # Obtém preços de energia
 
         self.season = self.determine_season()  # Determina a estação do ano
-        self.indoor_temperature_standard = self.set_standard_indoor_temperature()  # Define a temperatura padrão
+        self.indoor_temperature = self.set_standard_indoor_temperature()  # Define a temperatura padrão
 
     def load_weather_data(self):
         try:
@@ -132,20 +132,24 @@ class Environment:
 
     def set_standard_indoor_temperature(self):
         if self.season == "Inverno":
-            return 20  # Exemplo de temperatura padrão para o Inverno
+            return 20.0  # Exemplo de temperatura padrão para o Inverno
         elif self.season == "Primavera":
-            return 22  # Temperatura padrão para a Primavera
+            return 22.0  # Temperatura padrão para a Primavera
         elif self.season == "Verão":
-            return 24  # Temperatura padrão para o Verão
+            return 24.0  # Temperatura padrão para o Verão
         else:  # Outono
-            return 21  # Temperatura padrão para o Outono
+            return 21.0  # Temperatura padrão para o Outono
 
     def get_indoor_temperature(self):
         # Retorna a temperatura interior
-        return self.indoor_temperature_standard
+        return self.indoor_temperature
 
     def verify_season(self):
         print(f"A data {self.date.date()} corresponde à estação: {self.season}.")
         
     def update_room_temperature(self,degrees_heated):
-        return self.season
+        self.indoor_temperature += degrees_heated
+    
+    def decrease_temperature(self):
+        self.indoor_temperature -= .5 #needs a function to load external temperature
+        

@@ -15,7 +15,7 @@ async def start_agents(env):
     # Inicializa os agentes passando o ambiente para todos eles
     energy_agent = EnergyAgent("energy_agent@localhost", "password", env)
     heater_agent = HeaterAgent("heater@localhost", "password", env, energy_agent)
-    fridge_agent = FridgeAgent("fridge@localhost", "password", env)
+    #fridge_agent = FridgeAgent("fridge@localhost", "password", env)
     solar_agent = SolarPanelAgent("solar@localhost", "password", env.solar_battery)
     print("[DEBUG] Todos os agentes foram inicializados.")
 
@@ -28,7 +28,7 @@ async def start_agents(env):
     )
     print("[DEBUG] HeaterBehaviour foi adicionado ao HeaterAgent.")
 
-    fridge_agent.add_behaviour(FridgeAgent.FridgeBehaviour())
+    #fridge_agent.add_behaviour(FridgeAgent.FridgeBehaviour())
     print("[DEBUG] FridgeBehaviour foi adicionado ao FridgeAgent.")
 
     solar_agent.add_behaviour(SolarPanelAgent.SolarBehaviour())
@@ -36,7 +36,7 @@ async def start_agents(env):
 
     # Inicia os agentes
     await heater_agent.start()
-    await fridge_agent.start()
+    #await fridge_agent.start()
     await solar_agent.start()
     print("[DEBUG] Todos os agentes foram iniciados.")
 
@@ -47,7 +47,7 @@ async def start_agents(env):
         if time.time() - start_time > 60:  # Para após 60 segundos
             print("Encerrando agentes após 60 segundos.")
             await heater_agent.stop()
-            await fridge_agent.stop()
+            #wait fridge_agent.stop()
             await solar_agent.stop()
             break
         await asyncio.sleep(1)  # Pausa para simulação
