@@ -29,7 +29,7 @@ class HeaterAgent(Agent):
             if current_room_temp < desired_temp_range[0]:
                 dissatisfaction = (desired_temp_range[0] - current_room_temp)
             elif current_room_temp > desired_temp_range[1]:
-                dissatisfaction = (current_room_temp - desired_temp_range[1])
+                dissatisfaction = (desired_temp_range[1] - current_room_temp)
             else:
                 dissatisfaction = 0  # Dentro da faixa, sem insatisfação
 
