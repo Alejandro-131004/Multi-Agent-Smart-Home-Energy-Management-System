@@ -3,6 +3,7 @@ from agents.heater import HeaterAgent
 from agents.solar_panel import SolarPanelAgent
 from agents.solar_battery import SolarBattery
 from agents.energy_control import EnergyAgent
+from agents.system_state import SystemState
 import time
 import asyncio
 
@@ -11,12 +12,12 @@ async def start_agents(env):
     solar_battery = SolarBattery(capacity_kwh=1000)
     env.solar_battery = solar_battery  # Associando a solar_battery ao ambiente
     print("[DEBUG] SolarBattery foi criada e associada ao ambiente.")
-
+    system_state = SystemState()
     # Inicializa os agentes passando o ambiente para todos eles
-    energy_agent = EnergyAgent("energy_agent@localhost", "password", env)
-    heater_agent = HeaterAgent("heater@localhost", "password", env, energy_agent)
+    energy_agent = EnergyAgent("energy_agent@localhost", "password", env,system_state)
+    heater_agent = HeaterAgent("heater@localhost", "password", env, energy_agent,system_state)
     #fridge_agent = FridgeAgent("fridge@localhost", "password", env)
-    solar_agent = SolarPanelAgent("solar@localhost", "password", env.solar_battery)
+    solar_agent = SolarPanelAgent("solar@localhost", "password", env.solar_battery,system_state)
     print("[DEBUG] Todos os agentes foram inicializados.")
 
     # Adiciona os comportamentos aos agentes, passando os parâmetros necessários
@@ -24,7 +25,7 @@ async def start_agents(env):
     weight_dissatisfaction = 1.0  # Exemplo de valor, ajuste conforme necessário
 
     heater_agent.add_behaviour(
-        HeaterAgent.HeaterBehaviour(env, energy_agent, heater_power_per_degree, weight_dissatisfaction)
+        HeaterAgent.HeaterBehaviour(env, energy_agent, heater_power_per_degree, weight_dissatisfaction,system_state)
     )
     print("[DEBUG] HeaterBehaviour foi adicionado ao HeaterAgent.")
 

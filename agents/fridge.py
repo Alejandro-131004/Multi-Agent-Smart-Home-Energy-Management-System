@@ -8,11 +8,19 @@ import time
 
 # Agente do Refrigerador
 class FridgeAgent(Agent):
+    def __init__(self, jid, password, environment, energy_agent):
+            super().__init__(jid, password)
+            self.environment = environment  # Refere-se ao Environment
+            self.energy_agent = energy_agent
+            self.current_price = None  # Preço inicial da eletricidade
+            self.consumption = None # Consumo total de energia
     class FridgeBehaviour(CyclicBehaviour):
-        def __init__(self):
+        def __init__(self, environment, energy_agent, current_price, consumption):
             super().__init__()
-            self.current_price = 0.1  # Preço inicial da eletricidade
-            self.consumption = 0  # Consumo total de energia
+            self.environment = environment
+            self.energy_agent = energy_agent
+            self.current_price = current_price  # Preço inicial da eletricidade
+            self.consumption = consumption # Consumo total de energia
 
         async def run(self):
             # Simula o preço dinâmico da eletricidade
@@ -29,3 +37,7 @@ class FridgeAgent(Agent):
             #await self.send(msg)
 
             await asyncio.sleep(10)  # Corrigido para usar asyncio.sleep
+    
+    async def setup(self):
+        print(f"[Aquecedor] Agente Aquecedor inicializado.")
+        self.add_behaviour(self.FridgeBehaviour(self.environment, self.energy_agent,self.current_price, self.consumption))

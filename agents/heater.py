@@ -1,10 +1,12 @@
 from spade.agent import Agent
 from spade.behaviour import CyclicBehaviour
 import asyncio
+from agents.system_state import SystemState
 
 class HeaterAgent(Agent):
-    def __init__(self, jid, password, environment, energy_agent):
+    def __init__(self, jid, password, environment, energy_agent, system_state):
         super().__init__(jid, password)
+        self.system_state = system_state
         self.environment = environment  # Refere-se ao Environment
         self.energy_agent = energy_agent  # EnergyAgent para consultar sobre energia
         self.heating_power_per_degree = 1.0  # Exemplo: 1000 LWatts por grau de aquecimento
@@ -12,9 +14,10 @@ class HeaterAgent(Agent):
         
 
     class HeaterBehaviour(CyclicBehaviour):
-        def __init__(self, environment, energy_agent, heating_power_per_degree, base_priority):
+        def __init__(self, environment, energy_agent, heating_power_per_degree, base_priority,system_state):
             super().__init__()
             self.environment = environment
+            self.system_state = system_state
             self.energy_agent = energy_agent
             self.heating_power_per_degree = heating_power_per_degree
             self.base_priority = base_priority
@@ -37,12 +40,20 @@ class HeaterAgent(Agent):
             dynamic_priority = self.calculate_priority(dissatisfaction)
 
             print(f"[Aquecedor] Grau de insatisfação: {dissatisfaction}°C. Prioridade dinâmica: {dynamic_priority}.")
-
+            
             if dissatisfaction > 0:
                 # Solicita ao EnergyAgent a energia necessária, baseado na prioridade dinâmica
                 energy_needed = self.calculate_energy_consumption(dissatisfaction)
                 print("neeeeeeeeeeeeeeeeeeeeeeeed",energy_needed)
-                energy_power = await self.energy_agent.decide_power(energy_needed, dynamic_priority)
+                solar_energy_available = self.agent.system_state.solar_energy_produced
+                
+                if solar_energy_available > 0:
+                    energy_power = min(solar_energy_available, energy_needed)
+                    print(f" Vai usar {energy_power} kWh de energia solar.")
+                else:
+                    print(f" Não há energia solar disponível.")
+                    energy_power = 0
+                self.update_price()
 
                 print(f"[Aquecedor] Potência recomendada pelo EnergyAgent: {energy_power} LWatts.")
 
@@ -73,4 +84,4 @@ class HeaterAgent(Agent):
 
     async def setup(self):
         print(f"[Aquecedor] Agente Aquecedor inicializado.")
-        self.add_behaviour(self.HeaterBehaviour(self.environment, self.energy_agent, self.heating_power_per_degree, self.base_priority))
+        self.add_behaviour(self.HeaterBehaviour(self.environment, self.energy_agent, self.heating_power_per_degree, self.base_priority,self.system_state))

@@ -2,11 +2,14 @@ from spade.agent import Agent
 from spade.behaviour import CyclicBehaviour
 import pandas as pd
 import asyncio
+from spade.message import Message
+from agents.system_state import SystemState
 
 class SolarPanelAgent(Agent):
-    def __init__(self, jid, password, solar_battery):
+    def __init__(self, jid, password, solar_battery,system_state):
         super().__init__(jid, password)
-        self.solar_battery = solar_battery  # SolarBattery associada a este agente
+        self.solar_battery = solar_battery # SolarBattery associada a este agente
+        self.system_state = system_state
         
         # Tenta ler o CSV e verifica se a coluna 'generation solar' existe
         try:
@@ -36,6 +39,9 @@ class SolarPanelAgent(Agent):
 
             # Acessa o agente externo (SolarPanelAgent) para obter os dados de geração solar
             solar_energy = self.agent.get_solar_generation()
+            self.agent.system_state.update_solar_energy(solar_energy)
+            
+            print("[SolarPanel] Sent energy production message.")
             if solar_energy is not None:
                 print(f"[Painel Solar] Gerando {solar_energy} kWh de energia")
                 # Carregar a SolarBattery com a energia gerada, se válida
