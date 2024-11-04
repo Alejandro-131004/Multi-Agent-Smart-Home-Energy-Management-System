@@ -1,43 +1,35 @@
 from spade.agent import Agent
 from spade.behaviour import CyclicBehaviour
 from spade.message import Message
-import random
 import asyncio
-import time
 
-
-# Agente do Refrigerador
 class FridgeAgent(Agent):
-    def __init__(self, jid, password, environment, energy_agent):
-            super().__init__(jid, password)
-            self.environment = environment  # Refere-se ao Environment
-            self.energy_agent = energy_agent
-            self.current_price = None  # Preço inicial da eletricidade
-            self.consumption = None # Consumo total de energia
+    def __init__(self, jid, password, system_state):
+        super().__init__(jid, password)
+        self.system_state = system_state  # Reference to the SystemState dataclass
+        self.consumption = 0.0  # Total energy consumption initialized to 0
+
     class FridgeBehaviour(CyclicBehaviour):
-        def __init__(self, environment, energy_agent, current_price, consumption):
+        def __init__(self, system_state):
             super().__init__()
-            self.environment = environment
-            self.energy_agent = energy_agent
-            self.current_price = current_price  # Preço inicial da eletricidade
-            self.consumption = consumption # Consumo total de energia
+            self.system_state = system_state  # Reference to the SystemState dataclass
 
         async def run(self):
-            # Simula o preço dinâmico da eletricidade
-            self.current_price = round(random.uniform(0.05, 0.2), 2)
-            print(f"[Refrigerador] Preço da eletricidade: {self.current_price} por kWh")
+            # Request the current energy price from the SystemState
+            energy_price = self.system_state.energy_price
+            print(f"[Fridge] Current electricity price: {energy_price} €/kWh")
 
-            # Comportamento do refrigerador (consome energia constante)
-            self.consumption += 0.5  # Consumo constante
-            print(f"[Refrigerador] Consumindo energia... Total: {self.consumption} kWh")
+            # Simulate the fridge consuming a constant amount of energy
+            consumption_amount = 0.5  # Fixed consumption for this cycle
+            self.consumption += consumption_amount  # Update total consumption
 
-            # Enviar mensagem para o painel solar sobre o consumo
-            #msg = Message(to="solar@localhost")
-            #msg.body = str(self.consumption)
-            #await self.send(msg)
+            # Report energy consumption to the SystemState
+            self.system_state.receive_message(sender="fridge", msg_type="confirmation", data=consumption_amount)
+            print(f"[Fridge] Consuming energy... Total: {self.consumption} kWh")
 
-            await asyncio.sleep(10)  # Corrigido para usar asyncio.sleep
-    
+            # Simulate waiting time before the next cycle
+            await asyncio.sleep(10)  # Adjust the sleep duration as needed
+
     async def setup(self):
-        print(f"[Aquecedor] Agente Aquecedor inicializado.")
-        self.add_behaviour(self.FridgeBehaviour(self.environment, self.energy_agent,self.current_price, self.consumption))
+        print(f"[Fridge] Fridge Agent initialized.")
+        self.add_behaviour(self.FridgeBehaviour(self.system_state))
