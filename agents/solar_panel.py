@@ -4,6 +4,7 @@ import pandas as pd
 import asyncio
 from spade.message import Message
 from agents.system_state import SystemState
+from spade.message import Message
 
 class SolarPanelAgent(Agent):
     def __init__(self, jid, password, solar_battery,system_state):
@@ -37,12 +38,21 @@ class SolarPanelAgent(Agent):
                 print("[SolarPanelAgent] Sem dados de geração solar disponíveis. Comportamento suspenso.")
                 return  # Sai se os dados não foram carregados corretamente
 
-            # Acessa o agente externo (SolarPanelAgent) para obter os dados de geração solar
+            # Listen for incoming requests for energy information
+            msg = await self.receive(timeout=10)  # Wait for a message for up to 10 seconds
+            if msg:
+                # Handle the incoming request for energy information
+                if msg.get_metadata("type") == "energy_info_request":
+                    await self.handle_energy_info_request(msg.sender)
+
+            # Access the external agent (SolarPanelAgent) to obtain solar generation data
             solar_energy = self.agent.get_solar_generation()
             self.agent.system_state.update_solar_energy(solar_energy)
             
+            # Send the energy production update to the system state
+            self.agent.system_state.receive_message(sender="solarpanel", msg_type="solar_energy", data=solar_energy)
             print("[SolarPanel] Sent energy production message.")
-            if solar_energy is not None:
+            '''if solar_energy is not None:
                 print(f"[Painel Solar] Gerando {solar_energy} kWh de energia")
                 # Carregar a SolarBattery com a energia gerada, se válida
                 if solar_energy > 0:
@@ -53,7 +63,7 @@ class SolarPanelAgent(Agent):
                 print("[Painel Solar] Não foi possível gerar energia solar.")
 
             # Espera 10 segundos até gerar nova energia
-            await asyncio.sleep(10)
+            await asyncio.sleep(10)'''
 
     async def setup(self):
         print(f"[Painel Solar] Agente Solar inicializado.")

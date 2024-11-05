@@ -50,15 +50,8 @@ class EnergyAgent(Agent):
             """Cyclic behavior that updates price and solar energy periodically."""
             await self.update_price()
             self.agent.system_state.update_energy_price(self.agent.currentprice)
-            msg = Message(to="heater_agent@localhost")  
-            msg.set_metadata("performative", "inform")
-            msg.set_metadata("type", "energy_price")   
-            msg.body = float(self.currentprice) # posible error
-            await self.send(msg)
-            print("[Energy agent] Sent energy price message.")
+            self.system_state.receive_message(sender="energyagent", msg_type="solar_energy", data=self.agent.currentprice)
             
-            # Wait for a specified period before the next update (e.g., 1 hour in simulation time)
-            await asyncio.sleep(10)  # 10 seconds here as an example for testing
 
     async def setup(self):
         print(f"[EnergyAgent] Agent {self.name} is starting...")
