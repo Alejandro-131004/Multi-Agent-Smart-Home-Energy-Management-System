@@ -1,87 +1,88 @@
 from spade.agent import Agent
 from spade.behaviour import CyclicBehaviour
+from spade.message import Message
 import asyncio
-from agents.system_state import SystemState
 
 class HeaterAgent(Agent):
-    def __init__(self, jid, password, environment, energy_agent, system_state):
+    def __init__(self, jid, password, environment, energy_agent):
         super().__init__(jid, password)
-        self.system_state = system_state
-        self.environment = environment  # Refere-se ao Environment
-        self.energy_agent = energy_agent  # EnergyAgent para consultar sobre energia
-        self.heating_power_per_degree = 1.0  # Exemplo: 1000 LWatts por grau de aquecimento
-        self.base_priority = 1.0 # Prioridade base do aquecedor
-        
+        self.environment = environment  # Refers to the Environment
+        self.energy_agent = energy_agent  # EnergyAgent to consult about energy
+        self.heating_power_per_degree = 1.0  # Example: 1 kW per degree of heating
+        self.base_priority = 1.0  # Base priority of the heater
 
     class HeaterBehaviour(CyclicBehaviour):
-        def __init__(self, environment, energy_agent, heating_power_per_degree, base_priority,system_state):
+        def __init__(self, environment, energy_agent):
             super().__init__()
             self.environment = environment
-            self.system_state = system_state
             self.energy_agent = energy_agent
-            self.heating_power_per_degree = heating_power_per_degree
-            self.base_priority = base_priority
 
         async def run(self):
-            # Obtenção da temperatura interior atual
+            # Get the current indoor temperature
             current_room_temp = self.environment.get_indoor_temperature()
             desired_temp_range = (self.environment.desired_temperature - 1, 
                                   self.environment.desired_temperature + 1)
 
-            # Calcular grau de insatisfação
+            # Calculate dissatisfaction level
             if current_room_temp < desired_temp_range[0]:
                 dissatisfaction = (desired_temp_range[0] - current_room_temp)
             elif current_room_temp > desired_temp_range[1]:
-                dissatisfaction = (desired_temp_range[1] - current_room_temp)
+                dissatisfaction = (current_room_temp - desired_temp_range[1])
             else:
-                dissatisfaction = 0  # Dentro da faixa, sem insatisfação
+                dissatisfaction = 0  # Within range, no dissatisfaction
 
-            # Calcular prioridade baseada na insatisfação e base_priority
+            # Calculate priority based on dissatisfaction
             dynamic_priority = self.calculate_priority(dissatisfaction)
 
-            print(f"[Aquecedor] Grau de insatisfação: {dissatisfaction}°C. Prioridade dinâmica: {dynamic_priority}.")
-            
+            print(f"[Heater] Dissatisfaction level: {dissatisfaction}°C. Dynamic priority: {dynamic_priority}.")
+
             if dissatisfaction > 0:
-                # Solicita ao EnergyAgent a energia necessária, baseado na prioridade dinâmica
+                # Request the necessary energy from the EnergyAgent
                 energy_needed = self.calculate_energy_consumption(dissatisfaction)
-                print("neeeeeeeeeeeeeeeeeeeeeeeed",energy_needed)
-                solar_energy_available = self.agent.system_state.solar_energy_produced
-                
-                if solar_energy_available > 0:
-                    energy_power = min(solar_energy_available, energy_needed)
-                    print(f" Vai usar {energy_power} kWh de energia solar.")
+                print(f"Energy needed: {energy_needed} kWh.")
+
+                # Send a message to the SystemState agent to get available solar energy
+                request_msg = Message(to="system_state@localhost")  # Assuming you know the JID
+                request_msg.set_metadata("performative", "request")
+                request_msg.set_metadata("type", "solar_energy_request")
+                await self.send(request_msg)
+
+                # Wait for the response from the SystemState agent
+                response = await self.receive(timeout=10)
+                if response and response.get_metadata("type") == "solar_energy_response":
+                    solar_energy_available = float(response.body)
+                    print(f"[Heater] Solar energy available: {solar_energy_available} kWh.")
+                    
+                    if solar_energy_available > 0:
+                        energy_power = min(solar_energy_available, energy_needed)
+                        print(f"[Heater] Using {energy_power} kWh of solar energy.")
+                    else:
+                        print("[Heater] No solar energy available.")
+                        energy_power = 0
                 else:
-                    print(f" Não há energia solar disponível.")
+                    print("[Heater] No response from SystemState agent or invalid message.")
                     energy_power = 0
-                self.update_price()
 
-                print(f"[Aquecedor] Potência recomendada pelo EnergyAgent: {energy_power} LWatts.")
-
+                # Update the heating based on available energy
                 if energy_power > 0:
-                    degrees_heated = energy_power / self.heating_power_per_degree
+                    degrees_heated = energy_power / self.agent.heating_power_per_degree
                     self.environment.update_room_temperature(degrees_heated)
-                    print(f"[Aquecedor] A temperatura da sala foi aumentada em {degrees_heated}°C.")
+                    print(f"[Heater] Room temperature increased by {degrees_heated}°C.")
                 else:
-                    print(f"[Aquecedor] Sem energia disponível para aquecimento.")
-            else :
-                    print(f"Temperatura confortavel.")
-                    self.environment.decrease_temperature();        
+                    print("[Heater] No energy available for heating.")
+            else:
+                print("[Heater] Comfortable temperature, no heating needed.")
 
-            await asyncio.sleep(10)
+            await asyncio.sleep(10)  # Wait before the next iteration
 
         def calculate_priority(self, dissatisfaction):
-            """
-            Calcula a prioridade dinâmica baseada na insatisfação e na prioridade base.
-            """
-            return self.base_priority + dissatisfaction  # Exemplo simples de cálculo de prioridade
+            """Calculates dynamic priority based on dissatisfaction and base priority."""
+            return self.agent.base_priority + dissatisfaction  # Example of priority calculation
 
         def calculate_energy_consumption(self, dissatisfaction):
-            """
-            Calcula o gasto de energia (Watts) por hora para compensar o grau de insatisfação.
-            """
-            print("disati",dissatisfaction)
-            return dissatisfaction   # Exemplo: 1000 LWatts por grau de insatisfação
+            """Calculates energy consumption (kWh) based on dissatisfaction level."""
+            return dissatisfaction  # Example: 1 kWh per degree of dissatisfaction
 
     async def setup(self):
-        print(f"[Aquecedor] Agente Aquecedor inicializado.")
-        self.add_behaviour(self.HeaterBehaviour(self.environment, self.energy_agent, self.heating_power_per_degree, self.base_priority,self.system_state))
+        print(f"[Heater] Heater agent initialized.")
+        self.add_behaviour(self.HeaterBehaviour(self.environment, self.energy_agent))

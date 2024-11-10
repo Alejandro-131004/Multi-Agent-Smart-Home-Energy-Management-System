@@ -20,31 +20,27 @@ class SystemState(Agent):
 
     async def setup(self):
         print("[SystemState] Agent is running.")
-        # Start the state management cycle
         self.cycle_task = self.loop.create_task(self.cycle_states())
 
     async def cycle_states(self):
-        """Continuously manage states for requesting data and processing messages."""
         while True:
             if self.state == 0:
                 await self.request_energy_price_and_solar_production()
-                self.state = 1  # Switch to state 1 after requesting data
+                self.state = 1
             elif self.state == 1 and self.solar_confirm == 1 and self.energy_confirm == 1:
-                await self.process_messages()  # Process the received messages
-                self.state = 0  # Reset to state 0 after processing
-                self.solar_confirm = 0  # Reset solar confirmation
-                self.energy_confirm = 0  # Reset energy confirmation
+                await self.process_messages()
+                self.state = 0
+                self.solar_confirm = 0
+                self.energy_confirm = 0
             
-            await asyncio.sleep(1)  # Adjust cycle frequency as needed
+            await asyncio.sleep(1)
 
     async def request_energy_price_and_solar_production(self):
-        """Request the current energy price and solar production data from respective agents."""
         await self.request_energy_price()
         await self.request_solar_production()
         print("[SystemState] Requested updates for energy price and solar production.")
 
     async def request_energy_price(self):
-        """Send request for energy price update to the energy agent."""
         energy_agent_id = "energy_agent@localhost"
         msg = Message(to=energy_agent_id)
         msg.set_metadata("performative", "request")
@@ -54,7 +50,6 @@ class SystemState(Agent):
         print("[SystemState] Sent energy price request to energy agent.")
 
     async def request_solar_production(self):
-        """Send request for solar energy production update to the solar agent."""
         solar_agent_id = "solar_agent@localhost"
         msg = Message(to=solar_agent_id)
         msg.set_metadata("performative", "request")
@@ -64,39 +59,46 @@ class SystemState(Agent):
         print("[SystemState] Sent solar production request to solar agent.")
 
     async def process_messages(self):
-        """Process the priority queue and notify the next agent to execute if all messages have been received."""
-        if self.agents_ready == len(self.agent_priorities):
-            self.agents_ready = 0  # Reset for the next cycle
-            await self.execute_agents()  # Process the agents in the queue
-
-    async def execute_agents(self):
-        """Execute agents in order of priority."""
         while not self.priority_queue.empty():
-            agent_id = await self.next_in_queue()  # Get the next agent
-            await self.notify_agent(agent_id)  # Notify agent to execute their task
+            agent_id = await self.next_in_queue()
+            await self.notify_agent(agent_id)
 
     async def notify_agent(self, agent_id: str):
-        """Notify the specified agent that it is their turn to execute and wait for a response."""
         if agent_id in self.agent_priorities:
             print(f"[SystemState] Notifying {agent_id} to execute.")
-            
-            try:
-                msg = Message(to=f"{agent_id}@localhost")
-                msg.set_metadata("performative", "inform")
-                msg.set_metadata("type", "priority_notification")
-                msg.body = f"Priority level: {self.agent_priorities[agent_id]}"
-                await self.send(msg)
-                print(f"[SystemState] Sent notification message to {agent_id}.")
-                await asyncio.sleep(2)  # Simulate interaction time or remove for actual responses
-                self.current_agent = None
+            msg = Message(to=f"{agent_id}@localhost")
+            msg.set_metadata("performative", "inform")
+            msg.set_metadata("type", "priority_notification")
+            msg.body = f"Priority level: {self.agent_priorities[agent_id]}"
+            await self.send(msg)
+            print(f"[SystemState] Sent notification message to {agent_id}.")
 
-            except Exception as e:
-                print(f"[SystemState] Error notifying {agent_id}: {e}")
-        else:
-            print(f"[SystemState] Warning: Agent {agent_id} not found in priorities.")
+    def receive_message(self, xmpp_message: Message):
+        """Route incoming messages based on type."""
+        msg_type = xmpp_message.get_metadata("type")
+        data = float(xmpp_message.body)
+
+        if msg_type == "energy_price":
+            self.update_energy_price(data)
+            self.energy_confirm = 1
+        elif msg_type == "solar_energy":
+            self.update_solar_energy(data)
+            self.solar_confirm = 1
+        elif msg_type == "battery_charge":
+            self.update_battery_charge(data)
+        elif msg_type == "priority":
+            self.update_priority(xmpp_message.sender, data)
+        elif msg_type == "confirmation":
+            self.handle_confirmation(xmpp_message.sender, data)
+        elif msg_type == "energy_price_request":
+            asyncio.create_task(self.handle_price_request(xmpp_message.sender))
+        elif msg_type == "solar_production_request":
+            asyncio.create_task(self.handle_solar_request(xmpp_message.sender))
+
+        print(f"[SystemState] Received '{msg_type}' message from {xmpp_message.sender} with data: {data}")
 
     async def handle_price_request(self, sender: str):
-        """Handle a request from an agent for the current energy price."""
+        """Handle a request for the current energy price."""
         print(f"[SystemState] Received energy price request from {sender}.")
         msg = Message(to=sender)
         msg.set_metadata("performative", "inform")
@@ -106,49 +108,37 @@ class SystemState(Agent):
         await self.send(msg)
         print(f"[SystemState] Sent energy price {self.energy_price} to {sender}.")
 
-    def receive_message(self, xmpp_message: Message):
-        """
-        Handle incoming XMPP messages with updates on energy price, solar energy, battery status, or priority.
-        """
-        msg_type = xmpp_message.get_metadata("type")
-        data = float(xmpp_message.body)  # Convert message body to float
+    async def handle_solar_request(self, sender: str):
+        """Handle a request for the current solar energy production."""
+        print(f"[SystemState] Received solar production request from {sender}.")
+        msg = Message(to=sender)
+        msg.set_metadata("performative", "inform")
+        msg.set_metadata("type", "solar_energy_response")
+        msg.body = str(self.solar_energy)
 
-        if msg_type == "energy_price":
-            self.update_energy_price(data)
-            self.energy_confirm = 1  # Set confirmation flag for energy price
-        elif msg_type == "solar_energy":
-            self.update_solar_energy(data)
-            self.solar_confirm = 1  # Set confirmation flag for solar energy
-        elif msg_type == "battery_charge":
-            self.update_battery_charge(data)
-        elif msg_type == "priority":
-            self.update_priority(xmpp_message.sender, data)
-        elif msg_type == "confirmation":
-            print(f"[SystemState] Received confirmation from {xmpp_message.sender} for {data} kWh energy used.")
-            self.update_solar_energy(-data)  # Deduct energy used only in this method
-            self.agents_ready += 1  # Increment agent processed count
-
-        print(f"[SystemState] Received '{msg_type}' message from {xmpp_message.sender} with data: {data}")
+        await self.send(msg)
+        print(f"[SystemState] Sent solar energy {self.solar_energy} to {sender}.")
 
     def update_energy_price(self, new_price: float):
-        """Update the current energy price and notify agents if necessary."""
         self.energy_price = new_price
         print(f"[SystemState] Energy price updated to {self.energy_price} €/kWh.")
 
     def update_battery_charge(self, amount: float):
-        """Update the battery charge by a specified amount."""
         self.battery_charge += amount
-        self.battery_charge = max(0.0, self.battery_charge)  # Ensure non-negative charge
+        self.battery_charge = max(0.0, self.battery_charge)
         print(f"[SystemState] Battery charge updated to {self.battery_charge} kWh.")
 
     def update_solar_energy(self, amount: float):
-        """Set or adjust the solar energy produced for the current cycle."""
         self.solar_energy = amount
         print(f"[SystemState] Solar energy updated to {self.solar_energy} kWh.")
 
     def update_priority(self, agent_id: str, priority: float):
-        """Update an agent's priority in the queue."""
         self.agent_priorities[agent_id] = priority
-        self.priority_queue.put((-priority, agent_id))  # Negative for highest-priority first
-        self.agents_ready += 1  # Increment agents ready count
+        self.priority_queue.put((-priority, agent_id))
+        self.agents_ready += 1
         print(f"[SystemState] Priority for agent {agent_id} set to {priority}.")
+
+    def handle_confirmation(self, sender: str, data: float):
+        print(f"[SystemState] Received confirmation from {sender} for {data} kWh energy used.")
+        self.update_solar_energy(-data)  # Deduct energy used
+        self.agents_ready += 1  # Increment agents processed count
