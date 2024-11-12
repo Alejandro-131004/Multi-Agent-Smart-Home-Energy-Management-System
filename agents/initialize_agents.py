@@ -14,7 +14,7 @@ async def start_agents(env):
     print("[DEBUG] SolarBattery foi criada e associada ao ambiente.")
     system_state = SystemState("system@localhost", "password")
     # Inicializa os agentes passando o ambiente para todos eles
-    energy_agent = EnergyAgent("energy_agent@localhost", "password", env,"system@localhost")
+    energy_agent = EnergyAgent("energy_agent@localhost", "password", env)
     heater_agent = HeaterAgent("heater@localhost", "password", env, energy_agent)
     
     #fridge_agent = FridgeAgent("fridge@localhost", "password", env)

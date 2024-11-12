@@ -4,10 +4,10 @@ import pandas as pd
 from spade.message import Message
 
 class EnergyAgent(Agent):
-    def __init__(self, jid, password, environment, system_state_jid):
+    def __init__(self, jid, password, environment):
         super().__init__(jid, password)
         self.environment = environment  # Refers to the Environment
-        self.system_state_jid = system_state_jid  # JID of the SystemState agent
+        
         self.current_price = 3000  # Initial energy price
         self.threshold_price = 0.20  # Price threshold for using grid energy
 
@@ -47,11 +47,11 @@ class EnergyAgent(Agent):
             # Listen for incoming requests
             msg = await self.receive(timeout=10)  # Wait for a message for up to 10 seconds
             if msg:
-                if msg.get_metadata("type") == "price_request":  # Check if the message is a price request
+                if msg.get_metadata("type") == "energy_price_request":  # Check if the message is a price request
                     await self.update_price()  # Update the price
 
                     # Send the updated energy price to the SystemState agent
-                    price_msg = Message(to=self.agent.system_state_jid)
+                    price_msg = Message(to="system@localhost")  # Corrected line
                     price_msg.set_metadata("performative", "inform")
                     price_msg.set_metadata("type", "energy_price")
                     price_msg.body = str(self.agent.current_price)
@@ -67,6 +67,10 @@ class EnergyAgent(Agent):
                         self.agent.current_index += 1  # Move to the next index
                     else:
                         print("[EnergyAgent] No more energy data to process or data not loaded.")
+            else:
+                solar_generation = 0
+                self.current_index += 1
+                print("[EnergyAgent] Error when reciving message")
 
     async def setup(self):
         print(f"[EnergyAgent] Agent {self.name} is starting...")

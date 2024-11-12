@@ -73,7 +73,7 @@ class HeaterAgent(Agent):
             else:
                 print("[Heater] Comfortable temperature, no heating needed.")
 
-            await asyncio.sleep(10)  # Wait before the next iteration
+            await asyncio.sleep(0.1)  # Wait before the next iteration
 
         def calculate_priority(self, dissatisfaction):
             """Calculates dynamic priority based on dissatisfaction and base priority."""
