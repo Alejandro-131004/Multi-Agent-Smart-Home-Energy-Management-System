@@ -22,6 +22,10 @@ def main():
         # Obtém o preço atual da energia
         current_price = env.get_price_for_current_hour()
         print(f"Current energy price for {current_date}: {current_price}")
+
+        # Chama a função para obter os dados meteorológicos para a hora atual
+        current_weather = env.get_weather_for_each_hour()
+        print(f"Weather data for {current_date}: {current_weather}")
         
         # Inicia os agentes, passando o ambiente para a função start_agents
         asyncio.run(start_agents(env))  # Passando env como argumento

@@ -15,6 +15,7 @@ class Environment:
 
         self.season = self.determine_season()  # Determina a estação do ano
         self.indoor_temperature = self.set_standard_indoor_temperature()  # Define a temperatura padrão
+        self.weather_hour = self.get_weather_for_each_hour()
 
     def load_weather_data(self):
         try:
@@ -60,6 +61,48 @@ class Environment:
         except Exception as e:
             print(f"Ocorreu um erro: {e}")
             return None
+
+
+    def get_weather_for_each_hour(self):
+        # Normaliza a hora atual para o início da hora (sem minutos, segundos, etc.)
+        current_hour = self.date.replace(minute=0, second=0, microsecond=0)
+        print(f"Consultando dados meteorológicos para a hora: {current_hour.isoformat()}")
+
+        try:
+            # Primeiro, tenta buscar diretamente em UTC
+            current_hour_utc = current_hour.tz_convert('UTC')
+            weather_data = self.weather_data.get(current_hour_utc)
+
+            if weather_data is None:
+                print(f"Dados meteorológicos não encontrados em UTC, tentando UTC+1.")
+                # Tenta UTC+1 se não encontrar em UTC
+                current_hour_utc1 = current_hour.tz_convert('Europe/Berlin')  # UTC+1
+                weather_data = self.weather_data.get(current_hour_utc1)
+
+                if weather_data is None:
+                    print(f"Dados meteorológicos não encontrados em UTC+1, tentando UTC+2.")
+                    # Tenta UTC+2 se não encontrar em UTC+1
+                    current_hour_utc2 = current_hour.tz_convert('Europe/Istanbul')  # UTC+2
+                    weather_data = self.weather_data.get(current_hour_utc2)
+
+                    if weather_data is not None:
+                        print(f"Dados meteorológicos encontrados em UTC+2: {weather_data}")
+                    else:
+                        print(f"Dados meteorológicos não encontrados em UTC+2.")
+                else:
+                    print(f"Dados meteorológicos encontrados em UTC+1: {weather_data}")
+            else:
+                print(f"Dados meteorológicos encontrados em UTC: {weather_data}")
+
+            return weather_data
+
+        except Exception as e:
+            print(f"Erro ao processar a data {self.date}: {e}")
+            return None
+
+
+
+
 
     def display_weather_data(self):
         if self.weather_data is not None:

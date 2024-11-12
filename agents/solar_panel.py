@@ -5,10 +5,9 @@ import asyncio
 from spade.message import Message
 
 class SolarPanelAgent(Agent):
-    def __init__(self, jid, password, solar_battery, system_state_jid):
+    def __init__(self, jid, password, solar_battery):
         super().__init__(jid, password)
         self.solar_battery = solar_battery  # SolarBattery associated with this agent
-        self.system_state_jid = system_state_jid  # SystemState agent's JID
         
         # Try to read the CSV and check if the 'generation solar' column exists
         try:
@@ -46,7 +45,7 @@ class SolarPanelAgent(Agent):
                 print(f"[SolarPanel] Generating {solar_energy} kWh of energy.")
                 
                 # Send the energy production update to the system state
-                msg = Message(to=self.agent.system_state_jid)
+                msg = Message(to="system@localhost")
                 msg.set_metadata("performative", "inform")
                 msg.set_metadata("type", "solar_energy")
                 msg.body = str(solar_energy)
