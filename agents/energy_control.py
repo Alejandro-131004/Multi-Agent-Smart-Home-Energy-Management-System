@@ -45,18 +45,18 @@ class EnergyAgent(Agent):
             print(f"[EnergyAgent] Waiting for requests...")
 
             # Listen for incoming requests
-            msg = await self.receive(timeout=10)  # Wait for a message for up to 10 seconds
+            msg = await self.receive(timeout=10)  # Wait for a message
             if msg:
-                if msg.get_metadata("type") == "energy_price_request":  # Check if the message is a price request
-                    await self.update_price()  # Update the price
+                if msg.get_metadata("type") == "energy_price_request":  # Metadata matches
+                    await self.update_price()  # Logic to update the price
 
-                    # Send the updated energy price to the SystemState agent
-                    price_msg = Message(to="system@localhost")  # Corrected line
+                    # Send the updated price back
+                    price_msg = Message(to="system@localhost")
                     price_msg.set_metadata("performative", "inform")
-                    price_msg.set_metadata("type", "energy_price")
+                    price_msg.set_metadata("type", "energy_price")  # Metadata to identify this message
                     price_msg.body = str(self.agent.current_price)
 
-                    await self.send(price_msg)  # Send the updated price message
+                    await self.send(price_msg)
                     print(f"[EnergyAgent] Sent energy price update: {self.agent.current_price} €/kWh.")
 
                     # Example of accessing the current index
@@ -69,7 +69,7 @@ class EnergyAgent(Agent):
                         print("[EnergyAgent] No more energy data to process or data not loaded.")
             else:
                 solar_generation = 0
-                self.current_index += 1
+                self.agent.current_index += 1
                 print("[EnergyAgent] Error when reciving message")
 
     async def setup(self):

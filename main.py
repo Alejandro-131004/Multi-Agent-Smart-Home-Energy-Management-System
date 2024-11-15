@@ -10,11 +10,12 @@ def main():
     end_date = datetime.strptime('2015-01-01 23:00:00', '%Y-%m-%d %H:%M:%S')
     
     current_date = start_date
-    
+     # Inicializa o ambiente
+    env = Environment(date=current_date.strftime('%Y-%m-%d %H:%M:%S'), city='Valencia', num_divisions=5, desired_temperature=24)
+    asyncio.run(start_agents(env))  # Passando env como argumento
     # Loop até alcançar a data de término
     while current_date <= end_date:
-        # Inicializa o ambiente
-        env = Environment(date=current_date.strftime('%Y-%m-%d %H:%M:%S'), city='Valencia', num_divisions=5, desired_temperature=24)
+       
         
         # Exibe os dados meteorológicos
         env.display_weather_data()
@@ -28,7 +29,7 @@ def main():
         print(f"Weather data for {current_date}: {current_weather}")
         
         # Inicia os agentes, passando o ambiente para a função start_agents
-        asyncio.run(start_agents(env))  # Passando env como argumento
+        
         
         # Avança uma hora no tempo
         current_date += timedelta(hours=1)

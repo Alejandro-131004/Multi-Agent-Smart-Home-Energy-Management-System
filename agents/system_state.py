@@ -31,9 +31,10 @@ class SystemState(Agent):
             if self.agent.state == 0:
                 await self.request_energy_price()  # Call directly in run
                 await self.request_solar_production()  # Call directly in run
-                self.agent.state = 1
+                self.agent.state = 1                      #add a request messsage
+                await self.process_messages1()
             elif self.agent.state == 1 and self.agent.solar_confirm == 1 and self.agent.energy_confirm == 1:
-                await self.agent.process_messages()
+                await self.process_messages2()
                 self.agent.state = 0
                 self.agent.solar_confirm = 0
                 self.agent.energy_confirm = 0
@@ -41,32 +42,45 @@ class SystemState(Agent):
             await asyncio.sleep(.1)
 
         async def request_energy_price(self):
-            energy_agent_id = "energy_agent@local"
+            energy_agent_id = "energy_agent@localhost"
             msg = Message(to=energy_agent_id)
             msg.set_metadata("performative", "request")
-            msg.set_metadata("type", "energy_price_request")
-            
+            msg.set_metadata("type", "energy_price_request")  # Must match receiver's check
             await self.send(msg)
             print("[SystemState] Sent energy price request to energy agent.")
 
         async def request_solar_production(self):
-            solar_agent_id = "solar_agent@localhost"
+            solar_agent_id = "solar@localhost"
             msg = Message(to=solar_agent_id)
             msg.set_metadata("performative", "request")
             msg.set_metadata("type", "solar_production_request")
             
             await self.send(msg)
             print("[SystemState] Sent solar production request to solar agent.")
-
-        async def process_messages(self):
-            print("[SystemState] Collecting priority messages...")
+        async def process_messages1(self):
+            print("[SystemState] Collecting  messages...")
+            
+            # Collect all incoming messages
+            for _ in range(2):
+                try:
+                    msg = await self.receive(timeout=1)
+                    if msg:
+                        if(self.agent.state == 1):
+                            await self.receive_message1(msg)   
+                except asyncio.TimeoutError:
+                    print("[SystemState] No more messages received within timeout. Processing queue...")
+                    break
+        
+        async def process_messages2(self):
+            print("[SystemState] Collecting  messages...")
             
             # Collect all incoming messages
             while True:
                 try:
                     msg = await self.receive(timeout=1)
                     if msg:
-                        self.receive_message(msg)
+                        if(self.agent.state == 2):
+                            await self.receive_message2(msg)
                 except asyncio.TimeoutError:
                     print("[SystemState] No more messages received within timeout. Processing queue...")
                     break
@@ -99,20 +113,25 @@ class SystemState(Agent):
                 
                 await self.send(msg)
                 print(f"[SystemState] Sent notification message to {agent_id}.")
-                
-
-        def receive_message(self, xmpp_message: Message):
+        async def receive_message1(self, xmpp_message: Message):
             """Route incoming messages based on type."""
             msg_type = xmpp_message.get_metadata("type")
             data = float(xmpp_message.body)
 
             if msg_type == "energy_price":
                 self.update_energy_price(data)
-                self.energy_confirm = 1
+                print("energy price recived")
+                self.agent.energy_confirm = 1
             elif msg_type == "solar_energy":
                 self.update_solar_energy(data)
-                self.solar_confirm = 1
-            elif msg_type == "battery_charge":
+                print("solar production recived")
+                self.agent.solar_confirm = 1      
+
+        async def receive_message2(self, xmpp_message: Message):
+            """Route incoming messages based on type."""
+            msg_type = xmpp_message.get_metadata("type")
+            data = float(xmpp_message.body)
+            if msg_type == "battery_charge":
                 self.update_battery_charge(data)
             elif msg_type == "priority":
                 self.update_priority(xmpp_message.sender, data)

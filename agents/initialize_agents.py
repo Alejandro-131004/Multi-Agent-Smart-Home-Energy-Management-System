@@ -23,7 +23,7 @@ async def start_agents(env):
 
     # Adiciona os comportamentos aos agentes, passando os parâmetros necessários
     
-
+    '''
     system_state.add_behaviour(SystemState.CyclicStateBehaviour())
     heater_agent.add_behaviour(
         HeaterAgent.HeaterBehaviour(env, energy_agent)
@@ -34,13 +34,15 @@ async def start_agents(env):
     print("[DEBUG] FridgeBehaviour foi adicionado ao FridgeAgent.")
 
     solar_agent.add_behaviour(SolarPanelAgent.SolarBehaviour())
-    print("[DEBUG] SolarBehaviour foi adicionado ao SolarPanelAgent.")
+    print("[DEBUG] SolarBehaviour foi adicionado ao SolarPanelAgent.")'''
 
     # Inicia os agentes
     await heater_agent.start()
+    await energy_agent.start()
     #await fridge_agent.start()
     await solar_agent.start()
     await system_state.start()
+    
     print("[DEBUG] Todos os agentes foram iniciados.")
 
     # Controla o tempo de execução do sistema
