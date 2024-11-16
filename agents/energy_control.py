@@ -4,10 +4,10 @@ import pandas as pd
 from spade.message import Message
 
 class EnergyAgent(Agent):
-    def __init__(self, jid, password, environment):
+    def __init__(self, jid, password, environment,agents):
         super().__init__(jid, password)
         self.environment = environment  # Refers to the Environment
-        
+        self.agents = agents
         self.current_price = 3000  # Initial energy price
         self.threshold_price = 0.20  # Price threshold for using grid energy
 
@@ -30,10 +30,11 @@ class EnergyAgent(Agent):
         self.current_index = 0  # Initialize current index for energy data
 
     class EnergyBehaviour(CyclicBehaviour):
-        def __init__(self, environment, energy_data):
+        def __init__(self, environment, energy_data,agents):
             super().__init__()
             self.environment = environment
             self.energy_data = energy_data
+            self.agents = agents
 
         async def update_price(self):
             """Updates the energy price from the environment."""
@@ -43,21 +44,21 @@ class EnergyAgent(Agent):
         async def run(self):
             """Cyclic behavior that listens for requests and updates the price accordingly."""
             print(f"[EnergyAgent] Waiting for requests...")
-
+            msg = None
             # Listen for incoming requests
             msg = await self.receive(timeout=10)  # Wait for a message
             if msg:
                 if msg.get_metadata("type") == "energy_price_request":  # Metadata matches
                     await self.update_price()  # Logic to update the price
+                    for id in self.agents:
+                        # Send the updated price back
+                        price_msg = Message(to=id)
+                        price_msg.set_metadata("performative", "inform")
+                        price_msg.set_metadata("type", "energy_price")  # Metadata to identify this message
+                        price_msg.body = str(self.agent.current_price)
 
-                    # Send the updated price back
-                    price_msg = Message(to="system@localhost")
-                    price_msg.set_metadata("performative", "inform")
-                    price_msg.set_metadata("type", "energy_price")  # Metadata to identify this message
-                    price_msg.body = str(self.agent.current_price)
-
-                    await self.send(price_msg)
-                    print(f"[EnergyAgent] Sent energy price update: {self.agent.current_price} €/kWh.")
+                        await self.send(price_msg)
+                        print(f"[EnergyAgent] Sent energy price update: {self.agent.current_price} €/kWh.")
 
                     # Example of accessing the current index
                     if self.agent.energy_data is not None and self.agent.current_index < len(self.agent.energy_data):
@@ -75,5 +76,5 @@ class EnergyAgent(Agent):
     async def setup(self):
         print(f"[EnergyAgent] Agent {self.name} is starting...")
         # Create the behaviour with the required parameters
-        energy_behaviour = self.EnergyBehaviour(self.environment, self.energy_data)
+        energy_behaviour = self.EnergyBehaviour(self.environment, self.energy_data,self.agents)
         self.add_behaviour(energy_behaviour)  # Add the behaviour to the agent

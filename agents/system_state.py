@@ -7,7 +7,7 @@ from spade.message import Message
 from typing import Dict, Optional
 
 class SystemState(Agent):
-    def __init__(self, jid, password):
+    def __init__(self, jid, password,agents):
         super().__init__(jid, password)
         self.energy_price: float = 0.0
         self.battery_charge: float = 0.0
@@ -19,7 +19,7 @@ class SystemState(Agent):
         self.state = 0
         self.energy_confirm = 0
         self.solar_confirm = 0
-
+        self.agents = agents
     async def setup(self):
         print("[SystemState] Agent is running.")
         # Add CyclicStateBehaviour as behavior to this agent
@@ -31,8 +31,9 @@ class SystemState(Agent):
             if self.agent.state == 0:
                 await self.request_energy_price()  # Call directly in run
                 await self.request_solar_production()  # Call directly in run
-                self.agent.state = 1                      #add a request messsage
+                                   
                 await self.process_messages1()
+                self.agent.state = 1  
             elif self.agent.state == 1 and self.agent.solar_confirm == 1 and self.agent.energy_confirm == 1:
                 await self.process_messages2()
                 self.agent.state = 0
@@ -58,58 +59,64 @@ class SystemState(Agent):
             await self.send(msg)
             print("[SystemState] Sent solar production request to solar agent.")
         async def process_messages1(self):
-            print("[SystemState] Collecting  messages...")
+            print("[SystemState] Collecting  messages1...")
             
             # Collect all incoming messages
             for _ in range(2):
                 try:
                     msg = await self.receive(timeout=1)
                     if msg:
-                        if(self.agent.state == 1):
+                        if(self.agent.state == 0):
                             await self.receive_message1(msg)   
                 except asyncio.TimeoutError:
                     print("[SystemState] No more messages received within timeout. Processing queue...")
                     break
         
         async def process_messages2(self):
-            print("[SystemState] Collecting  messages...")
+            print("[SystemState] Collecting  messages2...")
             
             # Collect all incoming messages
-            while True:
+            while True:  # Continuous loop
+                print("Checking for incoming messages...")
                 try:
-                    msg = await self.receive(timeout=1)
-                    if msg:
-                        if(self.agent.state == 2):
-                            await self.receive_message2(msg)
+                    msg = await self.receive(timeout=1)  # Wait for a message with a 1-second timeout
+                    if msg:  # If a message is received
+                        if self.agent.state == 1:  # Only process the message if the agent's state is 1
+                            await self.receive_message2(msg)  # Process the message
+                    else:  # If no message is received within the timeout
+                        print("[SystemState] No message received within the timeout. Processing the queue...")
+                        break  # Exit the loop to avoid indefinite waiting
                 except asyncio.TimeoutError:
-                    print("[SystemState] No more messages received within timeout. Processing queue...")
-                    break
+                    print("[SystemState] Timeout occurred, no message received.")
 
+            # After the loop, process any pending messages or tasks
+
+            
             # Process agents in the priority queue with confirmation check
-            while not self.priority_queue.empty():
-                _, agent_id = self.priority_queue.get()
+            while not self.agent.priority_queue.empty():
+                _, agent_id = self.agent.priority_queue.get()
                 await self.notify_agent(agent_id)
 
                 # Wait for confirmation from the agent
                 print(f"[SystemState] Waiting for confirmation from {agent_id}...")
-                while self.agents_ready == 0:
+                while self.agent.agents_ready == 0:
                     try:
                         msg = await self.receive(timeout=1)
                         if msg:
-                            self.receive_message(msg)
+                            await self.receive_message2(msg)
                     except asyncio.TimeoutError:
                         continue
 
                 # Reset confirmation flag for next agent
-                self.agents_ready = 0
+                self.agent.agents_ready = 0
 
         async def notify_agent(self, agent_id: str):
-            if agent_id in self.agent_priorities:
+            if agent_id in self.agent.agent_priorities:
                 print(f"[SystemState] Notifying {agent_id} to execute with available solar energy.")
-                msg = Message(to=f"{agent_id}@localhost")
+                msg = Message(to=str(agent_id))
                 msg.set_metadata("performative", "inform")
-                msg.set_metadata("type", "priority_notification")
-                msg.body = f"Available solar energy: {self.solar_energy}, Priority level: {self.agent_priorities[agent_id]}"
+                msg.set_metadata("type", "solar_energy_available")
+                msg.body = str(self.solar_energy)
                 
                 await self.send(msg)
                 print(f"[SystemState] Sent notification message to {agent_id}.")
@@ -128,16 +135,18 @@ class SystemState(Agent):
                 self.agent.solar_confirm = 1      
 
         async def receive_message2(self, xmpp_message: Message):
+            print("message recived !!!!!!!!!!!!!!!")
             """Route incoming messages based on type."""
-            msg_type = xmpp_message.get_metadata("type")
-            data = float(xmpp_message.body)
+            msg_type = xmpp_message.get_metadata("type")  # Get the message type
+            data = float(xmpp_message.body)  # The message body should contain a float (e.g., dissatisfaction value)
+            
             if msg_type == "battery_charge":
-                self.update_battery_charge(data)
+                self.update_battery_charge(data)  # Call method to update battery charge
             elif msg_type == "priority":
-                self.update_priority(xmpp_message.sender, data)
+                self.update_priority(xmpp_message.sender, data)  # Update priority based on sender and dissatisfaction value
             elif msg_type == "confirmation":
-                self.handle_confirmation(xmpp_message.sender, data)
-                self.agents_ready = 1  # Set confirmation flag
+                self.handle_confirmation(xmpp_message.sender, data)  # Handle confirmation
+                self.agent.agents_ready = 1  # Set confirmation flag
 
         def handle_confirmation(self, sender: str, energy_used: float):
             """Handle confirmation of energy usage and update solar energy."""
@@ -161,6 +170,6 @@ class SystemState(Agent):
             print(f"[SystemState] Solar energy updated to {self.solar_energy} kWh.")
 
         def update_priority(self, agent_id: str, priority: float):
-            self.agent_priorities[agent_id] = priority
-            self.priority_queue.put((-priority, agent_id))
+            self.agent.agent_priorities[agent_id] = priority
+            self.agent.priority_queue.put((-priority, agent_id))
             print(f"[SystemState] Priority for agent {agent_id} set to {priority}.")

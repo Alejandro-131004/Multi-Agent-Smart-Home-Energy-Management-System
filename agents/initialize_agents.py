@@ -12,29 +12,17 @@ async def start_agents(env):
     solar_battery = SolarBattery(capacity_kwh=1000)
     env.solar_battery = solar_battery  # Associando a solar_battery ao ambiente
     print("[DEBUG] SolarBattery foi criada e associada ao ambiente.")
-    system_state = SystemState("system@localhost", "password")
+    
     # Inicializa os agentes passando o ambiente para todos eles
-    energy_agent = EnergyAgent("energy_agent@localhost", "password", env)
-    heater_agent = HeaterAgent("heater@localhost", "password", env, energy_agent)
+    energy_agent = EnergyAgent("energy_agent@localhost", "password", env,["system@localhost","heater@localhost","solar@localhost"])
+    heater_agent = HeaterAgent("heater@localhost", "password", env, energy_agent,)
     
     #fridge_agent = FridgeAgent("fridge@localhost", "password", env)
     solar_agent = SolarPanelAgent("solar@localhost", "password", env.solar_battery)
+    
+    system_state = SystemState("system@localhost", "password",["energy_agent@localhost","heater@localhost","solar@localhost"])
     print("[DEBUG] Todos os agentes foram inicializados.")
 
-    # Adiciona os comportamentos aos agentes, passando os parâmetros necessários
-    
-    '''
-    system_state.add_behaviour(SystemState.CyclicStateBehaviour())
-    heater_agent.add_behaviour(
-        HeaterAgent.HeaterBehaviour(env, energy_agent)
-    )
-    print("[DEBUG] HeaterBehaviour foi adicionado ao HeaterAgent.")
-
-    #fridge_agent.add_behaviour(FridgeAgent.FridgeBehaviour())
-    print("[DEBUG] FridgeBehaviour foi adicionado ao FridgeAgent.")
-
-    solar_agent.add_behaviour(SolarPanelAgent.SolarBehaviour())
-    print("[DEBUG] SolarBehaviour foi adicionado ao SolarPanelAgent.")'''
 
     # Inicia os agentes
     await heater_agent.start()

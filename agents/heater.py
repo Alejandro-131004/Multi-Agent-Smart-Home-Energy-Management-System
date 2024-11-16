@@ -16,6 +16,7 @@ class HeaterAgent(Agent):
             super().__init__()
             self.environment = environment
             self.energy_agent = energy_agent
+            energy_price = None
 
         async def run(self):
             # Get the current indoor temperature
@@ -40,19 +41,26 @@ class HeaterAgent(Agent):
                 # Request the necessary energy from the EnergyAgent
                 energy_needed = self.calculate_energy_consumption(dissatisfaction)
                 print(f"Energy needed: {energy_needed} kWh.")
-
+                msg = await self.receive(timeout=1)  # Wait for a message for up to 10 seconds
+                if msg:
+                    if msg.get_metadata("type") == "energy_price":
+                        energy_price = float(msg.body)
+                        print("[heateragent] recived energy price")
                 # Send a message to the SystemState agent to get available solar energy
-                request_msg = Message(to="system_state@localhost")  # Assuming you know the JID
+                # Sending the priority request message
+                request_msg = Message(to="system@localhost")  # You are sending to a specific agent
                 request_msg.set_metadata("performative", "request")
-                request_msg.set_metadata("type", "solar_energy_request")
+                request_msg.set_metadata("type", "priority")
+                request_msg.body = str(dissatisfaction)  # The message body contains dissatisfaction value
                 await self.send(request_msg)
+
 
                 # Wait for the response from the SystemState agent
                 response = await self.receive(timeout=10)
-                if response and response.get_metadata("type") == "solar_energy_response":
+                print("[heater] recived solar from system")
+                if response and response.get_metadata("type") == "solar_energy_available":
                     solar_energy_available = float(response.body)
                     print(f"[Heater] Solar energy available: {solar_energy_available} kWh.")
-                    
                     if solar_energy_available > 0:
                         energy_power = min(solar_energy_available, energy_needed)
                         print(f"[Heater] Using {energy_power} kWh of solar energy.")
@@ -67,13 +75,18 @@ class HeaterAgent(Agent):
                 if energy_power > 0:
                     degrees_heated = energy_power / self.agent.heating_power_per_degree
                     self.environment.update_room_temperature(degrees_heated)
+                    msg = Message(to="system@localhost")
+                    msg.set_metadata("performative", "inform")
+                    msg.set_metadata("type", "confirmation")
+                    msg.body = str(energy_power)
+                    await self.send(msg)
                     print(f"[Heater] Room temperature increased by {degrees_heated}°C.")
                 else:
                     print("[Heater] No energy available for heating.")
             else:
                 print("[Heater] Comfortable temperature, no heating needed.")
 
-            await asyncio.sleep(0.1)  # Wait before the next iteration
+            await asyncio.sleep(1)  # Wait before the next iteration
 
         def calculate_priority(self, dissatisfaction):
             """Calculates dynamic priority based on dissatisfaction and base priority."""
