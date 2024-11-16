@@ -15,7 +15,7 @@ class SystemState(Agent):
         self.priority_queue = PriorityQueue()
         self.current_agent: Optional[str] = None
         self.agent_priorities = {}
-        self.agents_ready = 0
+        self.agents_left = 0
         self.state = 0
         self.energy_confirm = 0
         self.solar_confirm = 0
@@ -99,17 +99,14 @@ class SystemState(Agent):
 
                 # Wait for confirmation from the agent
                 print(f"[SystemState] Waiting for confirmation from {agent_id}...")
-                while self.agent.agents_ready == 0:
+                while self.agent.agents_left > 0:
                     try:
                         msg = await self.receive(timeout=1)
                         if msg:
                             await self.receive_message2(msg)
                     except asyncio.TimeoutError:
                         continue
-
-                # Reset confirmation flag for next agent
-                self.agent.agents_ready = 0
-
+                self.agent.agents_left = 0
         async def notify_agent(self, agent_id: str):
             if agent_id in self.agent.agent_priorities:
                 print(f"[SystemState] Notifying {agent_id} to execute with available solar energy.")
@@ -144,9 +141,10 @@ class SystemState(Agent):
                 self.update_battery_charge(data)  # Call method to update battery charge
             elif msg_type == "priority":
                 self.update_priority(xmpp_message.sender, data)  # Update priority based on sender and dissatisfaction value
+                self.agent.agents_left += 1
             elif msg_type == "confirmation":
                 self.handle_confirmation(xmpp_message.sender, data)  # Handle confirmation
-                self.agent.agents_ready = 1  # Set confirmation flag
+                self.agent.agents_left -= 1  # Set confirmation flag
 
         def handle_confirmation(self, sender: str, energy_used: float):
             """Handle confirmation of energy usage and update solar energy."""
