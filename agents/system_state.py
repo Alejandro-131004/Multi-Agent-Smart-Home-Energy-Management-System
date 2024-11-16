@@ -19,6 +19,7 @@ class SystemState(Agent):
         self.state = 0
         self.energy_confirm = 0
         self.solar_confirm = 0
+        self.total_cost = 0
         self.agents = agents
     async def setup(self):
         print("[SystemState] Agent is running.")
@@ -132,24 +133,44 @@ class SystemState(Agent):
                 self.agent.solar_confirm = 1      
 
         async def receive_message2(self, xmpp_message: Message):
-            print("message recived !!!!!!!!!!!!!!!")
+            print("Message received!")
             """Route incoming messages based on type."""
-            msg_type = xmpp_message.get_metadata("type")  # Get the message type
-            data = float(xmpp_message.body)  # The message body should contain a float (e.g., dissatisfaction value)
             
-            if msg_type == "battery_charge":
-                self.update_battery_charge(data)  # Call method to update battery charge
-            elif msg_type == "priority":
-                self.update_priority(xmpp_message.sender, data)  # Update priority based on sender and dissatisfaction value
-                self.agent.agents_left += 1
-            elif msg_type == "confirmation":
-                self.handle_confirmation(xmpp_message.sender, data)  # Handle confirmation
-                self.agent.agents_left -= 1  # Set confirmation flag
+            # Get the message type
+            msg_type = xmpp_message.get_metadata("type")
+            
+            # Check if the message type is "confirmation" and handle comma-separated values
+            if msg_type == "confirmation":
+                try:
+                    # Split the body by commas and convert to floats
+                    values = [float(val) for val in xmpp_message.body.split(",")]
+                    if len(values) == 2:
+                        solar_used, cost = values
+                        print(f"[SystemState] Confirmation received. Solar used: {solar_used} kWh, Cost: {cost} €.")
+                        self.handle_confirmation(xmpp_message.sender, solar_used, cost)  # Pass both values
+                    else:
+                        print("[SystemState] Invalid confirmation message format.")
+                except ValueError:
+                    print("[SystemState] Error parsing confirmation message body.")
+            else:
+                try:
+                    # For other message types, assume a single value
+                    data = float(xmpp_message.body)
+                    if msg_type == "battery_charge":
+                        self.update_battery_charge(data)
+                    elif msg_type == "priority":
+                        self.update_priority(xmpp_message.sender, data)
+                        self.agent.agents_left += 1
+                    else:
+                        print(f"[SystemState] Unknown message type: {msg_type}.")
+                except ValueError:
+                    print(f"[SystemState] Error parsing message body for type {msg_type}.")
 
-        def handle_confirmation(self, sender: str, energy_used: float):
+
+        def handle_confirmation(self, sender: str, energy_used: float,cost: float):
             """Handle confirmation of energy usage and update solar energy."""
-            print(f"[SystemState] Received confirmation from {sender} for {energy_used} kWh energy used.")
-            
+            print(f"[SystemState] Received confirmation from {sender} for {energy_used} kWh energy used, and a total cost of {cost}€")
+            self.agent.total_cost += cost
             # Update solar energy after confirmed usage
             self.solar_energy -= energy_used
             print(f"[SystemState] Solar energy after usage by {sender}: {self.solar_energy} kWh.")

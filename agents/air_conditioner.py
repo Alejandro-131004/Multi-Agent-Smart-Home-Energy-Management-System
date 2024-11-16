@@ -18,7 +18,8 @@ class AirconAgent(Agent):
             self.heating_power_per_degree = heating_power_per_degree
             self.cooling_power_per_degree = cooling_power_per_degree
             self.base_priority = base_priority
-
+            self.solar_energy = 0
+            self.energy_needed = 0
         async def run(self):
             # Get the current indoor temperature
             current_room_temp = self.environment.get_indoor_temperature()
@@ -40,60 +41,47 @@ class AirconAgent(Agent):
 
             if dissatisfaction != 0:
                 # Request necessary energy price from the SystemState agent
-                energy_price = await self.request_energy_price()
-
-                if energy_price is not None:
-                    # Calculate the energy needed based on dissatisfaction
-                    energy_needed = self.calculate_energy_consumption(dissatisfaction)
-                    print("Energy needed:", energy_needed)
-
-                    # Request solar energy with the given priority
-                    await self.request_solar_energy(energy_needed, dynamic_priority)
-                else:
-                    print("[Aircon] Could not retrieve energy price; skipping solar energy request.")
+                msg = await self.receive(timeout=1)  # Wait for a message for up to 10 seconds
+                if msg:
+                    if msg.get_metadata("type") == "energy_price":
+                        energy_price = float(msg.body)
+                        print("[heateragent] recived energy price")
+                # Request solar energy with the given priority
+                self.solar_energy = await self.request_solar_energy(dynamic_priority)
+                
+                # Calculate the energy needed based on dissatisfaction
+                self.energy_needed = self.calculate_energy_consumption(dissatisfaction)
+                print("Energy needed:", self.energy_needed)
+                solar_used,cost = self.change_temperature()
+                msg = Message(to="system@localhost")
+                msg.set_metadata("performative", "inform")
+                msg.set_metadata("type", "confirmation")
+                msg.body = f"{solar_used},{cost}"
+                await self.send(msg)
+                
             else:
                 print(f"[Aircon] Comfortable temperature.")
 
             await asyncio.sleep(10)  # Wait before the next iteration
-
-        async def request_energy_price(self):
-            # Create a message to request the energy price
-            request_msg = Message(to="system_state_agent_jid")  # Replace with actual SystemState agent JID
+        async def change_temperature():
+            return 0,0
+        async def request_solar_energy(self, priority):
+            request_msg = Message(to="system@localhost")  # You are sending to a specific agent
             request_msg.set_metadata("performative", "request")
-            request_msg.set_metadata("type", "energy_price_request")
-
+            request_msg.set_metadata("type", "priority")
+            request_msg.body = str(priority)  # The message body contains dissatisfaction value
             await self.send(request_msg)
-            print("[Aircon] Requested energy price.")
+            print(f"[Aircon] Requested solar energy with priority {priority}.")
 
-            # Wait for the response
-            response = await self.receive(timeout=10)
-            if response and response.get_metadata("type") == "energy_price":
-                price = float(response.body)
-                print(f"[Aircon] Received energy price: {price} LWatts.")
-                return price
+            response = await self.receive(timeout=10)  # Wait for a response (with a 10-second timeout)
+            if response and response.get_metadata("type") == "solar_energy_available":
+                print("[Aircon] Received solar energy message from system.")
+                print(f"[Aircon] Solar energy available: {response.body} kWh.")
+                return float(response.body)  # Return the solar energy value from the message
             else:
-                print("[Aircon] No valid response received for energy price request.")
-                return None
+                print("[Aircon] No valid solar energy message received within timeout.")
+                return 0  # Return 0 if no message or an invalid message is received
 
-        async def request_solar_energy(self, energy_needed, priority):
-            # Create a message to request solar energy
-            request_msg = Message(to="system_state_agent_jid")  # Replace with actual SystemState agent JID
-            request_msg.set_metadata("performative", "request")
-            request_msg.set_metadata("type", "solar_production_request")
-            request_msg.body = str(energy_needed)
-
-            # Add priority to the message
-            request_msg.set_metadata("priority", str(priority))
-
-            await self.send(request_msg)
-            print(f"[Aircon] Requested {energy_needed} LWatts of solar energy with priority {priority}.")
-
-            # Wait for confirmation
-            response = await self.receive(timeout=10)
-            if response and response.get_metadata("type") == "confirmation":
-                print(f"[Aircon] Confirmation received for solar energy request from {response.sender}.")
-            else:
-                print("[Aircon] No valid confirmation received.")
 
         def calculate_priority(self, dissatisfaction):
             """Calculates dynamic priority based on dissatisfaction and base priority."""

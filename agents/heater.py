@@ -78,7 +78,7 @@ class HeaterAgent(Agent):
                     msg = Message(to="system@localhost")
                     msg.set_metadata("performative", "inform")
                     msg.set_metadata("type", "confirmation")
-                    msg.body = str(energy_power)
+                    msg.body = f"{energy_power},{0}" # 0 needs to be replaced with the actual cost
                     await self.send(msg)
                     print(f"[Heater] Room temperature increased by {degrees_heated}°C.")
                 else:
