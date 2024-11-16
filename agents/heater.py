@@ -41,7 +41,7 @@ class HeaterAgent(Agent):
                 # Request the necessary energy from the EnergyAgent
                 energy_needed = self.calculate_energy_consumption(dissatisfaction)
                 print(f"Energy needed: {energy_needed} kWh.")
-                msg = await self.receive(timeout=1)  # Wait for a message for up to 10 seconds
+                msg = await self.receive(timeout=5)  # Wait for a message for up to 10 seconds
                 if msg:
                     if msg.get_metadata("type") == "energy_price":
                         energy_price = float(msg.body)
@@ -56,7 +56,7 @@ class HeaterAgent(Agent):
 
 
                 # Wait for the response from the SystemState agent
-                response = await self.receive(timeout=10)
+                response = await self.receive(timeout=15)
                 print("[heater] recived solar from system")
                 if response and response.get_metadata("type") == "solar_energy_available":
                     solar_energy_available = float(response.body)
@@ -95,7 +95,3 @@ class HeaterAgent(Agent):
         def calculate_energy_consumption(self, dissatisfaction):
             """Calculates energy consumption (kWh) based on dissatisfaction level."""
             return dissatisfaction  # Example: 1 kWh per degree of dissatisfaction
-
-    async def setup(self):
-        print(f"[Heater] Heater agent initialized.")
-        self.add_behaviour(self.HeaterBehaviour(self.environment, self.energy_agent))

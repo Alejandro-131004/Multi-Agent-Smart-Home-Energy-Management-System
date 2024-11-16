@@ -21,11 +21,6 @@ class SystemState(Agent):
         self.solar_confirm = 0
         self.total_cost = 0
         self.agents = agents
-    async def setup(self):
-        print("[SystemState] Agent is running.")
-        # Add CyclicStateBehaviour as behavior to this agent
-        self.add_behaviour(self.CyclicStateBehaviour())
-        print("[SystemState] CyclicStateBehaviour added.")
 
     class CyclicStateBehaviour(CyclicBehaviour):
         async def run(self):
@@ -80,7 +75,7 @@ class SystemState(Agent):
             while True:  # Continuous loop
                 print("Checking for incoming messages...")
                 try:
-                    msg = await self.receive(timeout=1)  # Wait for a message with a 1-second timeout
+                    msg = await self.receive(timeout=3)  # Wait for a message with a 1-second timeout
                     if msg:  # If a message is received
                         if self.agent.state == 1:  # Only process the message if the agent's state is 1
                             await self.receive_message2(msg)  # Process the message
@@ -97,27 +92,26 @@ class SystemState(Agent):
             while not self.agent.priority_queue.empty():
                 _, agent_id = self.agent.priority_queue.get()
                 await self.notify_agent(agent_id)
-
+                
                 # Wait for confirmation from the agent
                 print(f"[SystemState] Waiting for confirmation from {agent_id}...")
-                while self.agent.agents_left > 0:
-                    try:
-                        msg = await self.receive(timeout=1)
-                        if msg:
-                            await self.receive_message2(msg)
-                    except asyncio.TimeoutError:
-                        continue
-                self.agent.agents_left = 0
+                
+                try:
+                    msg = await self.receive(timeout=3)
+                    if msg:
+                        await self.receive_message2(msg)
+                except asyncio.TimeoutError:
+                    continue
         async def notify_agent(self, agent_id: str):
             if agent_id in self.agent.agent_priorities:
                 print(f"[SystemState] Notifying {agent_id} to execute with available solar energy.")
                 msg = Message(to=str(agent_id))
                 msg.set_metadata("performative", "inform")
                 msg.set_metadata("type", "solar_energy_available")
-                msg.body = str(self.solar_energy)
-                
+                msg.body = str(self.solar_energy)  
                 await self.send(msg)
                 print(f"[SystemState] Sent notification message to {agent_id}.")
+                
         async def receive_message1(self, xmpp_message: Message):
             """Route incoming messages based on type."""
             msg_type = xmpp_message.get_metadata("type")
@@ -173,6 +167,7 @@ class SystemState(Agent):
             self.agent.total_cost += cost
             # Update solar energy after confirmed usage
             self.solar_energy -= energy_used
+            self.agent.agents_left -= 1
             print(f"[SystemState] Solar energy after usage by {sender}: {self.solar_energy} kWh.")
 
         def update_energy_price(self, new_price: float):

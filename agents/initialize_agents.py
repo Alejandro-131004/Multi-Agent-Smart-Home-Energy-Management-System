@@ -14,22 +14,33 @@ async def start_agents(env):
     print("[DEBUG] SolarBattery foi criada e associada ao ambiente.")
     
     # Inicializa os agentes passando o ambiente para todos eles
-    energy_agent = EnergyAgent("energy_agent@localhost", "password", env,["system@localhost","heater@localhost","solar@localhost"])
+    energy_agent = EnergyAgent("energy_agent@localhost", "password", env,["system@localhost","heater@localhost","solar@localhost","fridge@localhost"])
     heater_agent = HeaterAgent("heater@localhost", "password", env, energy_agent,)
     
-    #fridge_agent = FridgeAgent("fridge@localhost", "password", env)
+    fridge_agent = FridgeAgent("fridge@localhost", "password")
     solar_agent = SolarPanelAgent("solar@localhost", "password", env.solar_battery)
     
-    system_state = SystemState("system@localhost", "password",["energy_agent@localhost","heater@localhost","solar@localhost"])
+    system_state = SystemState("system@localhost", "password",["energy_agent@localhost","heater@localhost","solar@localhost","fridge@localhost"])
     print("[DEBUG] Todos os agentes foram inicializados.")
+        
 
+    system_state.add_behaviour(SystemState.CyclicStateBehaviour())
+    heater_agent.add_behaviour(
+        HeaterAgent.HeaterBehaviour(env, energy_agent)
+    )
+    print("[DEBUG] HeaterBehaviour foi adicionado ao HeaterAgent.")
 
+    fridge_agent.add_behaviour(FridgeAgent.FridgeBehaviour())
+    print("[DEBUG] FridgeBehaviour foi adicionado ao FridgeAgent.")
+    solar_agent.add_behaviour(SolarPanelAgent.SolarBehaviour())
     # Inicia os agentes
-    await heater_agent.start()
+    
     await energy_agent.start()
-    #await fridge_agent.start()
     await solar_agent.start()
     await system_state.start()
+    await heater_agent.start()
+    await fridge_agent.start()
+    
     
     print("[DEBUG] Todos os agentes foram iniciados.")
 
@@ -40,7 +51,7 @@ async def start_agents(env):
         if time.time() - start_time > 60:  # Para após 60 segundos
             print("Encerrando agentes após 60 segundos.")
             await heater_agent.stop()
-            #wait fridge_agent.stop()
+            await fridge_agent.stop()
             await system_state.stop()
             await solar_agent.stop()
             break
