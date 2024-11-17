@@ -31,7 +31,7 @@ async def start_agents(env):
 
     
 
-    car_charger_agent.add_behaviour(CarChargerAgent.CarChargerBehaviour())  # Adiciona o comportamento ao CarChargerAgent
+    #car_charger_agent.add_behaviour(CarChargerAgent.CarChargerBehaviour())  # Adiciona o comportamento ao CarChargerAgent
     print("[DEBUG] CarChargerBehaviour foi adicionado ao CarChargerAgent.")
         
 
@@ -48,10 +48,11 @@ async def start_agents(env):
     
     await energy_agent.start()
     await solar_agent.start()
+    await solar_battery.start()
     await system_state.start()
     await heater_agent.start()
     await fridge_agent.start()
-    await car_charger_agent.start()
+    #await car_charger_agent.start()
     
     
     print("[DEBUG] Todos os agentes foram iniciados.")

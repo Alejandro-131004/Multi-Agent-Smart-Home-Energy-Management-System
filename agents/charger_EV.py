@@ -44,7 +44,7 @@ class CarChargerAgent(Agent):
                     break
 
             # Configurar prioridade
-            self.priority = 10
+            self.priority = 1
             request_msg = Message(to="system@localhost")  # Enviar para um agente específico
             request_msg.set_metadata("performative", "request")
             request_msg.set_metadata("type", "priority")

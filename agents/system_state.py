@@ -19,6 +19,7 @@ class SystemState(Agent):
         self.state = 0
         self.energy_confirm = 0
         self.solar_confirm = 0
+        self.battery_confirm = 0
         self.total_cost = 0
         self.agents = agents
 
@@ -27,13 +28,15 @@ class SystemState(Agent):
             if self.agent.state == 0:
                 await self.request_energy_price()  # Call directly in run
                 await self.request_solar_production()  # Call directly in run
-                                   
+                await self.request_batery_status()      
                 await self.process_messages1()
                 self.agent.state = 1  
-            elif self.agent.state == 1 and self.agent.solar_confirm == 1 and self.agent.energy_confirm == 1:
+            elif self.agent.state == 1 and self.agent.solar_confirm == 1 and self.agent.energy_confirm == 1 and self.agent.battery_confirm == 1:
+                await self.broadcast()
                 await self.process_messages2()
                 self.agent.state = 0
                 self.agent.solar_confirm = 0
+                self.agent.battery_confirm = 0
                 self.agent.energy_confirm = 0
             
             await asyncio.sleep(.1)
@@ -54,52 +57,51 @@ class SystemState(Agent):
             
             await self.send(msg)
             print("[SystemState] Sent solar production request to solar agent.")
+        
+        async def request_batery_status(self):
+            battery_agent_id = "solar_battery@localhost"
+            msg = Message(to=battery_agent_id)
+            msg.set_metadata("performative", "request")
+            msg.set_metadata("type", "battery_status_request")
+            
+            await self.send(msg)
+            print("[SystemState] Sent battery status request to battery agent.")
+        async def broadcast(self):
+            for agent_id in self.agent.agents:  # Loop through the list of agent IDs
+                # Create a message to send to the agent
+                msg = Message(to=str(agent_id))
+                msg.set_metadata("performative", "inform")
+                msg.set_metadata("type", "solar_auction_started")
+                await self.send(msg)  # Send the message
+                print(f"[SystemState] Sent solar energy notification to {agent_id}.")
 
+        
         async def notify_agent(self, agent_id: str):
-                    # Verifica se há energia solar disponível
-                    if self.solar_energy > 0:
-                        # Verifica se o agente está na lista de prioridades
-                        if agent_id in self.agent.agent_priorities:
-                            print(f"[SystemState] Notifying {agent_id} to execute with available solar energy.")
-                            
-                            # Cria uma mensagem para enviar ao agente
-                            msg = Message(to=str(agent_id))
-                            msg.set_metadata("performative", "inform")
-                            msg.set_metadata("type", "solar_energy_available")
-                            msg.body = str(self.solar_energy)  # Envia a energia solar disponível
-                            await self.send(msg)  # Envia a mensagem
-                            print(f"[SystemState] Sent solar energy notification to {agent_id}.")
-                    else:
-                        # Caso não haja energia solar disponível, tenta usar energia da bateria
-                        battery_energy = self.battery_charge  # Checa a carga da bateria
-                        if battery_energy > 0:
-                            # Se a bateria tiver energia, envia uma notificação com a energia da bateria
-                            print(f"[SystemState] Solar energy exhausted. Notifying {agent_id} to execute with battery energy.")
-                            
-                            # Cria uma mensagem para enviar ao agente sobre a bateria
-                            msg = Message(to=str(agent_id))
-                            msg.set_metadata("performative", "inform")
-                            msg.set_metadata("type", "battery_energy_available")
-                            msg.body = str(battery_energy)  # Envia a energia da bateria disponível
-                            await self.send(msg)  # Envia a mensagem
-                            print(f"[SystemState] Sent battery energy notification to {agent_id}.")
-                        else:
-                            # Se não houver nem energia solar nem energia na bateria, avisa o agente
-                            print(f"[SystemState] No available solar or battery energy for {agent_id}.")
-                            msg = Message(to=str(agent_id))
-                            msg.set_metadata("performative", "inform")
-                            msg.set_metadata("type", "no_energy_available")
-                            msg.body = "No available energy sources for execution."  # Informa que não há energia
-                            await self.send(msg)  # Envia a mensagem
-                            print(f"[SystemState] Sent no energy notification to {agent_id}.")
+            # Check if there is available solar energy
+            if self.solar_energy > 0:
+                # Check if the agent is in the priority list
+                if agent_id in self.agent.agent_priorities:
+                    print(f"[SystemState] Notifying {agent_id} to execute with available solar energy.")
+                    
+                    # Create a message to send to the agent
+                    msg = Message(to=str(agent_id))
+                    msg.set_metadata("performative", "inform")
+                    msg.set_metadata("type", "energy_availablility")
+                    
+                    # Include solar energy, battery charge, and energy price as comma-separated values
+                    msg.body = f"{self.solar_energy},{self.battery_charge},{self.energy_price}"
+                    
+                    await self.send(msg)  # Send the message
+                    print(f"[SystemState] Sent solar energy notification to {agent_id} with details: {msg.body}.")
+
 
         async def process_messages1(self):
             print("[SystemState] Collecting  messages1...")
             
             # Collect all incoming messages
-            for _ in range(2):
+            for _ in range(3):
                 try:
-                    msg = await self.receive(timeout=1)
+                    msg = await self.receive(timeout=3)
                     if msg:
                         if(self.agent.state == 0):
                             await self.receive_message1(msg)   
@@ -109,21 +111,21 @@ class SystemState(Agent):
         
         async def process_messages2(self):
             print("[SystemState] Collecting messages2...")
+            self.battery_used = 0
 
-            # Processar mensagens recebidas
-            while self.agent.agents_left > 0:  # Continue enquanto há agentes que precisam responder
+            # Process incoming messages
+            while True:  
                 print("Checking for incoming messages...")
-                try:
-                    msg = await self.receive(timeout=3)
-                    if msg and self.agent.state == 1:
+                msg = await self.receive(timeout=10)
+                if msg:
+                    if self.agent.state == 1:
                         await self.receive_message2(msg)
-                except asyncio.TimeoutError:
-                    print("[SystemState] Timeout occurred, no message received.")
+                else:
+                    print("[SystemState] No message received within timeout. Breaking loop.")
                     break
 
-            # Processar a fila de prioridade
+            # Process the priority queue
             while not self.agent.priority_queue.empty():
-                # Verifica se todos os agentes já responderam
                 if self.agent.agents_left == 0:
                     print("[SystemState] All agents have responded. Moving to the next cycle.")
                     break
@@ -131,15 +133,25 @@ class SystemState(Agent):
                 _, agent_id = self.agent.priority_queue.get()
                 await self.notify_agent(agent_id)
 
-                # Aguarda confirmação do agente
+                # Wait for confirmation
                 print(f"[SystemState] Waiting for confirmation from {agent_id}...")
                 try:
                     msg = await self.receive(timeout=3)
-                    if msg:
+                    if msg and self.agent.state == 1:
                         await self.receive_message2(msg)
                 except asyncio.TimeoutError:
-                    continue
+                    print(f"[SystemState] Timeout waiting for confirmation from {agent_id}. Continuing...")
 
+            # Send energy differential to battery agent
+            energy_left = self.solar_energy - self.battery_used
+            battery_agent_id = "solar_battery@localhost"
+            msg = Message(to=battery_agent_id)
+            msg.set_metadata("performative", "inform")
+            msg.set_metadata("type", "energy_differential")
+            msg.body = str(energy_left)
+            await self.send(msg)
+            print("[SystemState] Sent energy differential update to battery agent.")
+   
                 
                         
         async def receive_message1(self, xmpp_message: Message):
@@ -154,7 +166,10 @@ class SystemState(Agent):
             elif msg_type == "solar_energy":
                 self.update_solar_energy(data)
                 print("solar production recived")
-                self.agent.solar_confirm = 1      
+                self.agent.solar_confirm = 1  
+            elif msg_type == "battery_charge":
+                self.agent.battery_confirm = 1
+                self.update_battery_charge(data)    
 
         async def receive_message2(self, xmpp_message: Message):
             print("Message received!")
@@ -168,21 +183,20 @@ class SystemState(Agent):
                 try:
                     # Split the body by commas and convert to floats
                     values = [float(val) for val in xmpp_message.body.split(",")]
-                    if len(values) == 2:
-                        solar_used, cost = values
-                        print(f"[SystemState] Confirmation received. Solar used: {solar_used} kWh, Cost: {cost} €.")
-                        self.handle_confirmation(xmpp_message.sender, solar_used, cost)  # Pass both values
+                    if len(values) == 3:  # Expecting solar used, battery used, and cost
+                        solar_used, battery_used, cost = values
+                        print(f"[SystemState] Confirmation received. Solar used: {solar_used} kWh, Battery used: {battery_used} kWh, Cost: {cost} €.")
+                        self.handle_confirmation(xmpp_message.sender, solar_used, battery_used, cost)  # Pass all three values
                     else:
                         print("[SystemState] Invalid confirmation message format.")
                 except ValueError:
                     print("[SystemState] Error parsing confirmation message body.")
+
             else:
                 try:
                     # For other message types, assume a single value
                     data = float(xmpp_message.body)
-                    if msg_type == "battery_charge":
-                        self.update_battery_charge(data)
-                    elif msg_type == "priority":
+                    if msg_type == "priority":
                         self.update_priority(xmpp_message.sender, data)
                         self.agent.agents_left += 1
                     else:
@@ -191,13 +205,14 @@ class SystemState(Agent):
                     print(f"[SystemState] Error parsing message body for type {msg_type}.")
 
 
-        def handle_confirmation(self, sender: str, energy_used: float,cost: float):
+        def handle_confirmation(self, sender: str, energy_used: float,battery_used: float,cost: float):
             """Handle confirmation of energy usage and update solar energy."""
             print(f"[SystemState] Received confirmation from {sender} for {energy_used} kWh energy used, and a total cost of {cost}€")
             self.agent.total_cost += cost
             # Update solar energy after confirmed usage
             self.solar_energy = max(0.0, self.solar_energy - energy_used) #evita valores negativos
-
+            self.battery_charge -= battery_used
+            self.battery_used = battery_used
             self.agent.agents_left -= 1
             print(f"[SystemState] Solar energy after usage by {sender}: {self.solar_energy} kWh.")
 
@@ -206,8 +221,8 @@ class SystemState(Agent):
             print(f"[SystemState] Energy price updated to {self.energy_price} €/kWh.")
 
         def update_battery_charge(self, amount: float):
-            self.battery_charge += amount
-            self.battery_charge = max(0.0, self.battery_charge)
+            self.battery_charge = amount
+            self.battery_used = 0
             print(f"[SystemState] Battery charge updated to {self.battery_charge} kWh.")
 
         def update_solar_energy(self, amount: float):

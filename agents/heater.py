@@ -36,16 +36,19 @@ class HeaterAgent(Agent):
             dynamic_priority = self.calculate_priority(dissatisfaction)
 
             print(f"[Heater] Dissatisfaction level: {dissatisfaction}°C. Dynamic priority: {dynamic_priority}.")
+            while True:
+                msg = await self.receive(timeout=10)  # Aguarde uma mensagem por até 10 segundos
+                if msg and msg.get_metadata("type") == "solar_auction_started":
+                    break  # Saia do loop após processar a mensagem
+                elif msg:
+                    print(f"[Fridge] Ignored message with metadata type: {msg.get_metadata('type')}")
+                else:
+                    print("[Fridge] No message received within the timeout.")
 
             if dissatisfaction > 0:
                 # Request the necessary energy from the EnergyAgent
                 energy_needed = self.calculate_energy_consumption(dissatisfaction)
                 print(f"Energy needed: {energy_needed} kWh.")
-                msg = await self.receive(timeout=5)  # Wait for a message for up to 10 seconds
-                if msg:
-                    if msg.get_metadata("type") == "energy_price":
-                        energy_price = float(msg.body)
-                        print("[heateragent] recived energy price")
                 # Send a message to the SystemState agent to get available solar energy
                 # Sending the priority request message
                 request_msg = Message(to="system@localhost")  # You are sending to a specific agent
@@ -56,10 +59,10 @@ class HeaterAgent(Agent):
 
 
                 # Wait for the response from the SystemState agent
-                response = await self.receive(timeout=15)
+                response = await self.receive(timeout=30)
                 print("[heater] recived solar from system")
-                if response and response.get_metadata("type") == "solar_energy_available":
-                    solar_energy_available = float(response.body)
+                if response and response.get_metadata("type") == "energy_availablility":
+                    solar_energy_available, battery_status, energy_price = map(float, msg.body.split(","))
                     print(f"[Heater] Solar energy available: {solar_energy_available} kWh.")
                     if solar_energy_available > 0:
                         energy_power = min(solar_energy_available, energy_needed)
@@ -78,7 +81,7 @@ class HeaterAgent(Agent):
                     msg = Message(to="system@localhost")
                     msg.set_metadata("performative", "inform")
                     msg.set_metadata("type", "confirmation")
-                    msg.body = f"{energy_power},{0}" # 0 needs to be replaced with the actual cost
+                    msg.body = f"{energy_power},{0},{0}" # 0 needs to be replaced with the actual cost
                     await self.send(msg)
                     print(f"[Heater] Room temperature increased by {degrees_heated}°C.")
                 else:
