@@ -58,21 +58,28 @@ class HeaterAgent(Agent):
                 await self.send(request_msg)
 
 
-                # Wait for the response from the SystemState agent
-                response = await self.receive(timeout=30)
-                print("[heater] recived solar from system")
-                if response and response.get_metadata("type") == "energy_availablility":
-                    solar_energy_available, battery_status, energy_price = map(float, msg.body.split(","))
-                    print(f"[Heater] Solar energy available: {solar_energy_available} kWh.")
-                    if solar_energy_available > 0:
-                        energy_power = min(solar_energy_available, energy_needed)
-                        print(f"[Heater] Using {energy_power} kWh of solar energy.")
-                    else:
-                        print("[Heater] No solar energy available.")
-                        energy_power = 0
-                else:
-                    print("[Heater] No response from SystemState agent or invalid message.")
-                    energy_power = 0
+                while True:  # Keep checking until a valid response is received
+                    try:
+                        # Wait for the response from the SystemState agent
+                        response = await self.receive(timeout=10)
+                        print("[Heater] Received message from system.")
+
+                        if response and response.get_metadata("type") == "energy_availablility":
+                            # Extract solar energy, battery status, and energy price from the message body
+                            solar_energy_available, battery_status, energy_price = map(float, response.body.split(","))
+                            print(f"[Heater] Solar energy available: {solar_energy_available} kWh.")
+
+                            if solar_energy_available > 0:
+                                energy_power = min(solar_energy_available, energy_needed)
+                                print(f"[Heater] Using {energy_power} kWh of solar energy.")
+                                break  # Exit the loop once a valid match is found
+                            else:
+                                print("[Heater] No solar energy available.")
+                                energy_power = 0
+                                break
+                    except asyncio.TimeoutError:
+                        print("[Heater] Timeout while waiting for SystemState agent response. Retrying...")
+
 
                 # Update the heating based on available energy
                 if energy_power > 0:

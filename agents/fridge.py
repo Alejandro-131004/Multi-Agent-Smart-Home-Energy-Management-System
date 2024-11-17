@@ -40,7 +40,7 @@ class FridgeAgent(Agent):
                 response = await self.receive(timeout=30)
                 if response and response.get_metadata("type") == "energy_availablility":
                     try:
-                        solar_energy_available, battery_status, energy_price = map(float, msg.body.split(","))
+                        solar_energy_available, battery_status, energy_price = map(float, response.body.split(","))
                         print(f"[Fridge] Received solar energy available: {solar_energy_available} kWh")
                         break
                     except ValueError:
@@ -53,7 +53,7 @@ class FridgeAgent(Agent):
 
             if energy_price is not None:
                 # Calcular o consumo de energia
-                solar_energy_consumed,battery_energy_comsumed, cost = self.calculate_comsumption(
+                solar_energy_consumed,battery_energy_comsumed, cost = self.calculate_consumption(
                     consumption_amount, solar_energy_available,battery_status, energy_price
                 )
                 print(f"[Fridge] Consuming energy... Solar: {solar_energy_consumed} kWh, Cost: {cost} €")

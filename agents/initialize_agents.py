@@ -49,9 +49,9 @@ async def start_agents(env):
     await energy_agent.start()
     await solar_agent.start()
     await solar_battery.start()
-    await system_state.start()
     await heater_agent.start()
     await fridge_agent.start()
+    await system_state.start()
     #await car_charger_agent.start()
     
     
