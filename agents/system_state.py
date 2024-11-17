@@ -181,15 +181,12 @@ class SystemState(Agent):
             # Check if the message type is "confirmation" and handle comma-separated values
             if msg_type == "confirmation":
                 try:
-                    # Split the body by commas and convert to floats
-                    values = [float(val) for val in xmpp_message.body.split(",")]
-                    if len(values) == 3:  # Expecting solar used, battery used, and cost
-                        solar_used, battery_used, cost = values
-                        print(f"[SystemState] Confirmation received. Solar used: {solar_used} kWh, Battery used: {battery_used} kWh, Cost: {cost} €.")
-                        self.handle_confirmation(xmpp_message.sender, solar_used, battery_used, cost)  # Pass all three values
-                    else:
-                        print("[SystemState] Invalid confirmation message format.")
+                    # Split and unpack the body directly into solar_used, battery_used, and cost
+                    solar_used, battery_used, cost = map(float, xmpp_message.body.split(","))
+                    print(f"[SystemState] Confirmation received. Solar used: {solar_used} kWh, Battery used: {battery_used} kWh, Cost: {cost} €.")
+                    self.handle_confirmation(xmpp_message.sender, solar_used, battery_used, cost)
                 except ValueError:
+                    self.agent.agents_left -= 1
                     print("[SystemState] Error parsing confirmation message body.")
 
             else:
@@ -214,6 +211,7 @@ class SystemState(Agent):
             self.battery_charge -= battery_used
             self.battery_used = battery_used
             self.agent.agents_left -= 1
+            
             print(f"[SystemState] Solar energy after usage by {sender}: {self.solar_energy} kWh.")
 
         def update_energy_price(self, new_price: float):

@@ -41,7 +41,7 @@ class SolarPanelAgent(Agent):
                 return  # Exit if data has not been loaded correctly
 
             # Espera por uma mensagem por até 10 segundos
-            msg = await self.receive(timeout=30)  # Recebe uma mensagem ou espera por 10 segundos
+            msg = await self.receive(timeout=10)  # Recebe uma mensagem ou espera por 10 segundos
 
             if msg:  # Se uma mensagem foi recebida
                 # Verifica o tipo da mensagem e, se for "solar_production_request", gera energia solar
@@ -64,7 +64,7 @@ class SolarPanelAgent(Agent):
                 print("[SolarPanel] Unable to generate solar energy.")
 
             # Espera 10 segundos antes de tentar gerar nova energia
-            await asyncio.sleep(10)
+            await asyncio.sleep(0.1)
 
 
     async def setup(self):
