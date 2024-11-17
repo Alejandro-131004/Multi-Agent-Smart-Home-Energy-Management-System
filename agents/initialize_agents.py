@@ -9,16 +9,17 @@ import asyncio
 
 async def start_agents(env):
     # Cria a instância da SolarBattery no ambiente
-    solar_battery = SolarBattery(capacity_kwh=1000)
+    solar_battery = SolarBattery("solar_battery@localhost", "password", capacity_kwh=1000)
+
     env.solar_battery = solar_battery  # Associando a solar_battery ao ambiente
     print("[DEBUG] SolarBattery foi criada e associada ao ambiente.")
     
     # Inicializa os agentes passando o ambiente para todos eles
     energy_agent = EnergyAgent("energy_agent@localhost", "password", env,["system@localhost","heater@localhost","solar@localhost","fridge@localhost"])
-    heater_agent = HeaterAgent("heater@localhost", "password", env, energy_agent,)
+    heater_agent = HeaterAgent("heater@localhost", "password", env, energy_agent)
     
     fridge_agent = FridgeAgent("fridge@localhost", "password")
-    solar_agent = SolarPanelAgent("solar@localhost", "password", env.solar_battery)
+    solar_agent = SolarPanelAgent("solar@localhost", "password")
     
     system_state = SystemState("system@localhost", "password",["energy_agent@localhost","heater@localhost","solar@localhost","fridge@localhost"])
     print("[DEBUG] Todos os agentes foram inicializados.")
@@ -32,7 +33,7 @@ async def start_agents(env):
 
     fridge_agent.add_behaviour(FridgeAgent.FridgeBehaviour())
     print("[DEBUG] FridgeBehaviour foi adicionado ao FridgeAgent.")
-    solar_agent.add_behaviour(SolarPanelAgent.SolarBehaviour())
+    #solar_agent.add_behaviour(SolarPanelAgent.SolarBehaviour())
     # Inicia os agentes
     
     await energy_agent.start()
