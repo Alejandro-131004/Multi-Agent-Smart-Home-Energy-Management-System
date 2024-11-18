@@ -4,24 +4,32 @@ from spade.message import Message
 import asyncio
 
 class HeaterAgent(Agent):
-    def __init__(self, jid, password, environment):
+    def __init__(self, jid, password,desired_temperature):
         super().__init__(jid, password)
-        self.environment = environment  # Refers to the Environment
+        self.desired_temperature =  desired_temperature 
         
         self.heating_power_per_degree = 1.0  # Example: 1 kW per degree of heating
         self.base_priority = 1.0  # Base priority of the heater
 
     class HeaterBehaviour(CyclicBehaviour):
-        def __init__(self, environment):
+        def __init__(self):
             super().__init__()
-            self.environment = environment
             energy_price = None
 
         async def run(self):
-            # Get the current indoor temperature
-            current_room_temp = self.environment.get_indoor_temperature()
-            desired_temp_range = (self.environment.desired_temperature - 1, 
-                                  self.environment.desired_temperature + 1)
+            env_agent_id = "environment@localhost"
+            msg = Message(to=env_agent_id)
+            msg.set_metadata("performative", "request")
+            msg.set_metadata("type", "inside_temperature")  # Must match the receiver's check
+            await self.send(msg)
+            
+            while True:
+                msg = await self.receive(timeout=10)  # Aguarde uma mensagem por até 10 segundos
+                if msg and msg.get_metadata("type") == "inside_temperature":
+                    current_room_temp = float(msg.body)
+                    break
+            desired_temp_range = (self.agent.desired_temperature - 1, 
+                                  self.agent.desired_temperature + 1)
 
             # Calculate dissatisfaction level
             if current_room_temp < desired_temp_range[0]:
@@ -83,7 +91,11 @@ class HeaterAgent(Agent):
                 # Update the heating based on available energy
                 if energy_power > 0:
                     degrees_heated = energy_power / self.agent.heating_power_per_degree
-                    self.environment.update_room_temperature(degrees_heated)
+                    msg = Message(to=env_agent_id)
+                    msg.set_metadata("performative", "request")
+                    msg.set_metadata("type", "room_temperature_update")  # Must match the receiver's check
+                    msg.body = str(degrees_heated)
+                    await self.send(msg)
                     msg = Message(to="system@localhost")
                     msg.set_metadata("performative", "inform")
                     msg.set_metadata("type", "confirmation")

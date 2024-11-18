@@ -26,20 +26,18 @@ class EnvironmentAgent(Agent):
                         response.body = str(price)
                         response.set_metadata("type", "energy_price")
                     elif msg.metadata["type"] == "outside_temperature":
-                        self.agent.update_outside_temperature(msg.body)
-                        response.body = f"Outside temperature updated to: {self.agent.outside_temperature}"
+                        wheater = self.agent.get_weather_for_each_hour()
+                        response.body = str(wheater)
                         response.set_metadata("type", "outside_temperature_response")
                     elif msg.metadata["type"] == "inside_temperature":
-                        self.agent.update_inside_temperature(msg.body)
-                        response.body = f"Inside temperature updated to: {self.agent.inside_temperature}"
-                        response.set_metadata("type", "inside_temperature_response")
-                    elif msg.metadata["type"] == "room_temperature":
-                        self.agent.update_room_temperature(msg.body)
-                        response.body = f"Room temperature updated to: {self.agent.room_temperature}"
+                        temp = self.agent.get_indoor_temperature()
+                        response.set_metadata("type", "inside_temperature")
+                        response.body = str(temp)
+                    elif msg.metadata["type"] == "room_temperature_update":
+                        self.agent.update_room_temperature(float(msg.body))
                         response.set_metadata("type", "room_temperature_response")
                     else:
                         print(f"Unknown message type: {msg.metadata['type']}")
-                        response.body = f"Error: Unknown message type: {msg.metadata['type']}"
                         response.set_metadata("type", "error_response")
                 else:
                     print("Message received without valid metadata.")
@@ -47,7 +45,8 @@ class EnvironmentAgent(Agent):
                     response.set_metadata("type", "error_response")
 
                 # Send the response message
-                await self.send(response)
+                if(msg.metadata["type"] != "room_temperature_update"):
+                    await self.send(response)
                 print(f"[{self.agent.date}] Sent response: {response.body}")
 
 

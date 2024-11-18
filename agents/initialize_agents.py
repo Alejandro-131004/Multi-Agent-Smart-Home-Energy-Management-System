@@ -34,7 +34,7 @@ async def start_agents(date, city, num_divisions, desired_temperature):
 
     # Initialize other agents
     solar_battery = SolarBattery("solar_battery@localhost", "password", capacity_kwh=1000)
-    heater_agent = HeaterAgent("heater@localhost", "password", env_agent)
+    heater_agent = HeaterAgent("heater@localhost", "password", desired_temperature)
     fridge_agent = FridgeAgent("fridge@localhost", "password")
     solar_agent = SolarPanelAgent("solar@localhost", "password")
     system_state = SystemState("system@localhost", "password", ["energy_agent@localhost", "heater@localhost", "solar@localhost", "fridge@localhost"])
@@ -44,7 +44,7 @@ async def start_agents(date, city, num_divisions, desired_temperature):
     # Add behaviours to agents
     system_state.add_behaviour(SystemState.CyclicStateBehaviour())
     heater_agent.add_behaviour(
-        HeaterAgent.HeaterBehaviour(env_agent,)
+        HeaterAgent.HeaterBehaviour()
     )
     fridge_agent.add_behaviour(FridgeAgent.FridgeBehaviour())
 
