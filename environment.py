@@ -1,21 +1,86 @@
 # environment.py
 import pandas as pd
+from spade.agent import Agent
+from spade.behaviour import CyclicBehaviour
+from spade.message import Message
+import asyncio
 
-class Environment:
-    def __init__(self, date, city, num_divisions,desired_temperature):
-        self.date = pd.to_datetime(date)  # Data da simulação
+class EnvironmentAgent(Agent):
+    class EnvironmentBehaviour(CyclicBehaviour):
+        async def run(self):
+            print("[Env] waiting for messages")
+            # Wait indefinitely for a message
+            msg = await self.receive(timeout=200)  # Wait until a message is received
+            print(f"[env] Received message: {msg.body}")
+            if msg:
+                
+
+                response = Message(to=str(msg.sender))  # Create a response message to the sender
+                response.set_metadata("performative", "inform")  # Metadata to define the message purpose
+
+                # Process the message based on its metadata
+                if msg.metadata and "type" in msg.metadata:
+                    if msg.metadata["type"] == "energy_price_update":
+                        price = self.agent.get_price_for_current_hour()
+                        self.agent.date += pd.Timedelta(hours=1)
+                        response.body = str(price)
+                        response.set_metadata("type", "energy_price")
+                    elif msg.metadata["type"] == "outside_temperature":
+                        self.agent.update_outside_temperature(msg.body)
+                        response.body = f"Outside temperature updated to: {self.agent.outside_temperature}"
+                        response.set_metadata("type", "outside_temperature_response")
+                    elif msg.metadata["type"] == "inside_temperature":
+                        self.agent.update_inside_temperature(msg.body)
+                        response.body = f"Inside temperature updated to: {self.agent.inside_temperature}"
+                        response.set_metadata("type", "inside_temperature_response")
+                    elif msg.metadata["type"] == "room_temperature":
+                        self.agent.update_room_temperature(msg.body)
+                        response.body = f"Room temperature updated to: {self.agent.room_temperature}"
+                        response.set_metadata("type", "room_temperature_response")
+                    else:
+                        print(f"Unknown message type: {msg.metadata['type']}")
+                        response.body = f"Error: Unknown message type: {msg.metadata['type']}"
+                        response.set_metadata("type", "error_response")
+                else:
+                    print("Message received without valid metadata.")
+                    response.body = "Error: Message metadata missing or invalid"
+                    response.set_metadata("type", "error_response")
+
+                # Send the response message
+                await self.send(response)
+                print(f"[{self.agent.date}] Sent response: {response.body}")
+
+
+            
+    
+    def __init__(self, jid, password, date, city, num_divisions, desired_temperature):
+        super().__init__(jid, password)
+        self.date = pd.to_datetime(date)  # Simulation date
         self.city = city
         self.num_divisions = num_divisions
-        self.desired_temperature=desired_temperature
-        
-        # Carregar dados climáticos e de energia
-        self.weather_data = self.load_weather_data()  # Carrega dados climáticos
-        self.energy_data = self.load_energy_data()  # Carrega dados de energia
-        self.energy_prices = self.get_energy_prices()  # Obtém preços de energia
+        self.desired_temperature = desired_temperature
 
-        self.season = self.determine_season()  # Determina a estação do ano
-        self.indoor_temperature = self.set_standard_indoor_temperature()  # Define a temperatura padrão
+        # Placeholders for data to be loaded later
+        self.weather_data = None
+        self.energy_data = None
+        self.energy_prices = None
+        self.season = None
+        self.indoor_temperature = None
+        self.weather_hour = None
+
+    async def setup(self):
+        print(f"Agent {self.name} starting...")
+        # Load initial data during setup
+        self.weather_data = self.load_weather_data()
+        self.energy_data = self.load_energy_data()
+        self.energy_prices = self.get_energy_prices()
+        self.season = self.determine_season()
+        self.indoor_temperature = self.set_standard_indoor_temperature()
         self.weather_hour = self.get_weather_for_each_hour()
+
+        # Add the cyclic behavior
+        monitor_behaviour = self.EnvironmentBehaviour()
+        self.add_behaviour(monitor_behaviour)
 
     def load_weather_data(self):
         try:

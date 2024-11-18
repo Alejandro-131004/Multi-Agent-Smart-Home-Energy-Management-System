@@ -4,18 +4,17 @@ from spade.message import Message
 import asyncio
 
 class HeaterAgent(Agent):
-    def __init__(self, jid, password, environment, energy_agent):
+    def __init__(self, jid, password, environment):
         super().__init__(jid, password)
         self.environment = environment  # Refers to the Environment
-        self.energy_agent = energy_agent  # EnergyAgent to consult about energy
+        
         self.heating_power_per_degree = 1.0  # Example: 1 kW per degree of heating
         self.base_priority = 1.0  # Base priority of the heater
 
     class HeaterBehaviour(CyclicBehaviour):
-        def __init__(self, environment, energy_agent):
+        def __init__(self, environment):
             super().__init__()
             self.environment = environment
-            self.energy_agent = energy_agent
             energy_price = None
 
         async def run(self):
@@ -41,9 +40,9 @@ class HeaterAgent(Agent):
                 if msg and msg.get_metadata("type") == "solar_auction_started":
                     break  # Saia do loop após processar a mensagem
                 elif msg:
-                    print(f"[Fridge] Ignored message with metadata type: {msg.get_metadata('type')}")
+                    print(f"[Heater] Ignored message with metadata type: {msg.get_metadata('type')}")
                 else:
-                    print("[Fridge] No message received within the timeout.")
+                    print("[Heater] No message received within the timeout.")
 
             if dissatisfaction > 0:
                 # Request the necessary energy from the EnergyAgent

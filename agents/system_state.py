@@ -42,12 +42,13 @@ class SystemState(Agent):
             await asyncio.sleep(.1)
 
         async def request_energy_price(self):
-            energy_agent_id = "energy_agent@localhost"
+            energy_agent_id = "environment@localhost"
             msg = Message(to=energy_agent_id)
             msg.set_metadata("performative", "request")
-            msg.set_metadata("type", "energy_price_request")  # Must match receiver's check
+            msg.set_metadata("type", "energy_price_update")  # Must match the receiver's check
             await self.send(msg)
-            print("[SystemState] Sent energy price request to energy agent.")
+            print("[SystemState] Sent energy price request to env agent.")
+
 
         async def request_solar_production(self):
             solar_agent_id = "solar@localhost"
@@ -116,7 +117,7 @@ class SystemState(Agent):
             # Process incoming messages
             while True:  
                 print("Checking for incoming messages...")
-                msg = await self.receive(timeout=10)
+                msg = await self.receive(timeout=5)
                 if msg:
                     if self.agent.state == 1:
                         await self.receive_message2(msg)
