@@ -37,7 +37,7 @@ class AirconAgent(Agent):
                 dissatisfaction = 0
 
             dynamic_priority = self.calculate_priority(dissatisfaction)
-            print(f"[Aircon] f: {dissatisfaction}°C. Priority: {dynamic_priority}.")
+            print(f"[Aircon] Dissatisfaction: {dissatisfaction}°C. Priority: {dynamic_priority}.")
 
             while True:
                 msg = await self.receive(timeout=10)  # Aguarde uma mensagem por até 10 segundos
@@ -55,6 +55,7 @@ class AirconAgent(Agent):
                     if msg and msg.get_metadata("type") == "window_status":
                         if(msg.body == "open"):
                             self.window_open = True
+                            break
                         elif(msg.body == "closed"):
                             self.window_open = False
                             break  # Saia do loop após processar a mensagem
@@ -88,18 +89,13 @@ class AirconAgent(Agent):
                                 if solar_energy > 0:
                                     energy_power = min(solar_energy, energy_needed)
                                     print(f"[Aircon] Using {energy_power} kWh of solar energy.")
-
                                     degrees_cooled = energy_power / self.agent.cooling_power_per_degree
-                                    
                                     break
-                            
-                                
                                 else:
                                     # Caso não haja energia solar
                                     print("[Aircon] No solar energy available.")
                                     energy_power=0
                                     break
-
                             else:
                                 print ("nao entrei no if...")
                         except asyncio.TimeoutError:
@@ -110,30 +106,19 @@ class AirconAgent(Agent):
                         degrees_cooled = energy_power / self.agent.cooling_power_per_degree
                         msg = Message(to=env_agent_id)
                         msg.set_metadata("performative", "request")
-                        msg.set_metadata("type", "room_temperature_update")  # Deve coincidir com a verificação do receiver
+                        msg.set_metadata("type", "room_temperature_update_cold")  # Deve coincidir com a verificação do receiver
                         msg.body = str(degrees_cooled)
                         await self.send(msg)
-                        
                         print(f"[Aircon] Sent room temperature update: {degrees_cooled}°C.")
-                        
 
-                        # Aguarda confirmação do EnvAgent
-                        confirmation = await self.receive(timeout=10)  # Espera por até 10 segundos
-                        if confirmation and confirmation.get_metadata("type") == "temperature_update_confirmed":
-                            print("[Aircon] Received confirmation from EnvAgent.")
-                        else:
-                            print("[Aircon] No confirmation received from EnvAgent. Retrying or ignoring...")
-
-                        # Envia mensagem de "inform" para o sistema com informações do custo
-                        cost = 0  # Substitua por lógica para calcular o custo real
                         system_msg = Message(to="system@localhost")
                         system_msg.set_metadata("performative", "inform")
                         system_msg.set_metadata("type", "confirmation")
-                        system_msg.body = f"{energy_power},{0},{cost}"  # Inclui custo calculado
+                        system_msg.body = f"{energy_power},{0},{0}"  # Inclui custo calculado
                         await self.send(system_msg)
-                        print(f"[Aircon] Room temperature decreased by {degrees_cooled}°C and system informed.")
+                        print(f"[Aircon] Room temperature decreased by {degrees_cooled}°C")
                     else:
-                        print("[Aircon] No energy available for heating.")
+                        print("[Aircon] No energy available for cooling.")
                 else:
                      print("[Aircon] window open")
             else:

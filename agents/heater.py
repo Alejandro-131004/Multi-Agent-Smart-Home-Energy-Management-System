@@ -79,7 +79,6 @@ class HeaterAgent(Agent):
                     request_msg.body = str(dissatisfaction)  # The message body contains dissatisfaction value
                     await self.send(request_msg)
 
-
                     while True:  # Keep checking until a valid response is received
                         try:
                             # Wait for the response from the SystemState agent
@@ -108,7 +107,7 @@ class HeaterAgent(Agent):
                         degrees_heated = energy_power / self.agent.heating_power_per_degree
                         msg = Message(to=env_agent_id)
                         msg.set_metadata("performative", "request")
-                        msg.set_metadata("type", "room_temperature_update")  # Must match the receiver's check
+                        msg.set_metadata("type", "room_temperature_update_heat")  # Must match the receiver's check
                         msg.body = str(degrees_heated)
                         await self.send(msg)
                         msg = Message(to="system@localhost")

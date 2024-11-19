@@ -37,9 +37,13 @@ class EnvironmentAgent(Agent):
                         response.set_metadata("type", "inside_temperature")
                         response.body = str(temp)
 
-                    elif msg.metadata["type"] == "room_temperature_update":
-                        self.agent.update_room_temperature(float(msg.body))
-                        response.set_metadata("type", "room_temperature_response")
+                    elif msg.metadata["type"] == "room_temperature_update_heat":
+                        self.agent.update_room_temperature_heat(float(msg.body))
+                        response.set_metadata("type", "room_temperature_response_heat")
+
+                    elif msg.metadata["type"] == "room_temperature_update_cold":
+                        self.agent.update_room_temperature_cold(float(msg.body))
+                        response.set_metadata("type", "room_temperature_response_cold")
 
                     elif msg.metadata["type"] == "temperature_data":
                         inside_temp = self.agent.get_indoor_temperature()
@@ -56,9 +60,11 @@ class EnvironmentAgent(Agent):
                     response.set_metadata("type", "error_response")
 
                 # Send the response message
-                if (msg.metadata["type"] != "room_temperature_update"):
+                if msg.metadata["type"] != "room_temperature_update_heat" and msg.metadata["type"] != "room_temperature_update_cold":
                     await self.send(response)
                 print(f"[{self.agent.date}] Sent response: {response.body}")
+
+
 
     def __init__(self, jid, password, date, city, num_divisions, desired_temperature):
         super().__init__(jid, password)
@@ -252,8 +258,10 @@ class EnvironmentAgent(Agent):
     def verify_season(self):
         print(f"A data {self.date.date()} corresponde à estação: {self.season}.")
 
-    def update_room_temperature(self, degrees_heated):
+    def update_room_temperature_heat(self, degrees_heated):
+        print("Ni")
         self.indoor_temperature += degrees_heated
 
-    def decrease_temperature(self):
-        self.indoor_temperature -= .5  # needs a function to load external temperature
+    def update_room_temperature_cold(self, degrees_cooled):
+        print("niiiii")
+        self.indoor_temperature -= degrees_cooled  # needs a function to load external temperature
