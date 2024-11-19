@@ -22,7 +22,11 @@ class SystemState(Agent):
         self.battery_confirm = 0
         self.total_cost = 0
         self.agents = agents
-
+        self.energy_wasted = 0
+        self.energy_sold_money = 0
+        self.maxdisatisfaction = 0
+        self.totaldisatisfaction = 0
+        self.totalrequests = 0
     class CyclicStateBehaviour(CyclicBehaviour):
         async def run(self):
             if self.agent.state == 0:
@@ -152,9 +156,12 @@ class SystemState(Agent):
             msg.body = str(energy_left)
             await self.send(msg)
             print("[SystemState] Sent energy differential update to battery agent.")
-   
-                
-                        
+            self.energy_to_sell = 0
+            msg = await self.receive(timeout=1)
+            if msg and msg.get_metadata("type") == "energy_to_sell":
+                self.energy_to_sell = float(msg.body)  
+            self.agent.energy_wasted += self.energy_to_sell
+            self.agent.energy_sold_money += self.energy_to_sell*self.energy_price*.5
         async def receive_message1(self, xmpp_message: Message):
             """Route incoming messages based on type."""
             msg_type = xmpp_message.get_metadata("type")

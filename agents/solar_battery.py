@@ -41,7 +41,9 @@ class SolarBattery(Agent):  # Nome original restaurado
                     if(energy_differencial<0):
                         self.discharge(-energy_differencial)
                     elif(energy_differencial > 0):
-                        self.charge(energy_differencial)
+                        energy_left = self.charge(energy_differencial)
+                        if energy_left >0:
+                            await self.sell(energy_left)
                     print(f"[Solar battery] Current energy diferential: {energy_differencial}kWh")
                     break
                 else:
@@ -57,8 +59,10 @@ class SolarBattery(Agent):  # Nome original restaurado
             energy_to_store = solar_energy_kwh * self.charge_efficiency
             available_space = self.capacity_kwh - self.current_charge_kwh
             energy_stored = min(energy_to_store, available_space)
+            energy_left = energy_stored-energy_to_store
             self.current_charge_kwh += energy_stored
-            return energy_stored
+            
+            return energy_left
 
         def discharge(self, energy_needed_kwh):
             if energy_needed_kwh <= 0:
@@ -70,7 +74,13 @@ class SolarBattery(Agent):  # Nome original restaurado
 
         def get_state_of_charge(self):
             return self.current_charge_kwh
-
+        async def sell(self,energy_left):
+            msg = Message(to="system@localhost")
+            msg.set_metadata("performative", "inform")
+            msg.set_metadata("type", "energy_to_sell")
+            msg.body = str(energy_left) #mudei para n haver erros desatualizados
+            await self.send(msg) 
+            
     async def setup(self):
         print(f"[SolarBattery] Battery Agent initialized.")
         behaviour = self.BatteryBehaviour(self.capacity_kwh, charge_efficiency=0.9, discharge_efficiency=0.9)

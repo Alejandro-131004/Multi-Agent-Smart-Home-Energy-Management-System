@@ -10,6 +10,14 @@ class WindowAgent(Agent):
 
     class WindowBehaviour(CyclicBehaviour):
         async def run(self):
+            while True:
+                msg = await self.receive(timeout=10)  # Aguarde uma mensagem por até 10 segundos
+                if msg and msg.get_metadata("type") == "solar_auction_started":
+                    break  # Saia do loop após processar a mensagem
+                elif msg:
+                    print(f"[Heater] Ignored message with metadata type: {msg.get_metadata('type')}")
+                else:
+                    print("[Heater] No message received within the timeout.")
             # Solicitar temperatura externa e interna ao ambiente
             env_agent_id = "environment@localhost"
             msg = Message(to=env_agent_id)
