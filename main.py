@@ -10,7 +10,7 @@ def main():
     
     current_date = start_date
    
-    asyncio.run(start_agents(date=current_date.strftime('%Y-%m-%d %H:%M:%S'), city='Valencia', num_divisions=5, desired_temperature=24))  # Passando env como argumento
+    asyncio.run(start_agents(date=current_date.strftime('%Y-%m-%d %H:%M:%S'), city='Valencia', num_divisions=5, desired_temperature=12))  # Passando env como argumento
     
        
         

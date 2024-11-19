@@ -16,10 +16,11 @@ class HeaterAgent(Agent):
             self.window_status = "closed"  # Estado inicial das janelas
 
         async def run(self):
+            # Solicitar temperatura interna
             env_agent_id = "environment@localhost"
             msg = Message(to=env_agent_id)
             msg.set_metadata("performative", "request")
-            msg.set_metadata("type", "inside_temperature")  # Solicitar temperatura interna
+            msg.set_metadata("type", "inside_temperature")
             await self.send(msg)
 
             while True:
@@ -28,20 +29,16 @@ class HeaterAgent(Agent):
                     current_room_temp = float(msg.body)
                     break
 
+            # Calcular o nível de insatisfação
             desired_temp_range = (self.agent.desired_temperature - 1,
                                   self.agent.desired_temperature + 1)
-
-            # Calcular o nível de insatisfação
             if current_room_temp < desired_temp_range[0]:
                 dissatisfaction = (desired_temp_range[0] - current_room_temp)
-            elif current_room_temp > desired_temp_range[1]:
-                dissatisfaction = (current_room_temp - desired_temp_range[1])
             else:
-                dissatisfaction = 0  # Dentro da faixa desejada
+                dissatisfaction = 0
 
             # Atualizar a prioridade dinâmica
             dynamic_priority = self.calculate_priority(dissatisfaction)
-
             print(f"[Heater] Dissatisfaction level: {dissatisfaction}°C. Dynamic priority: {dynamic_priority}.")
 
             # Receber status das janelas
@@ -50,6 +47,7 @@ class HeaterAgent(Agent):
                 if msg and msg.get_metadata("type") == "window_status":
                     self.window_status = msg.body
                     print(f"[Heater] Received window status: {self.window_status}")
+                    break
                 elif msg and msg.get_metadata("type") == "solar_auction_started":
                     break
                 elif msg:
@@ -62,7 +60,6 @@ class HeaterAgent(Agent):
                 # Solicitar energia e realizar aquecimento
                 energy_needed = self.calculate_energy_consumption(dissatisfaction)
                 print(f"[Heater] Energy needed: {energy_needed} kWh.")
-                # Restante da lógica de energia...
             elif self.window_status == "open":
                 print("[Heater] Windows are open. Heating disabled to save energy.")
             else:
