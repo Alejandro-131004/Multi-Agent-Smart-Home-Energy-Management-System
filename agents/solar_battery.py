@@ -35,7 +35,7 @@ class SolarBattery(Agent):  # Nome original restaurado
             await self.send(msg)
             print("[SolarBattery] Sent state of charge to system.")
             while True:
-                msg = await self.receive(timeout=10)  # Aguarde uma mensagem por até 10 segundos
+                msg = await self.receive(timeout=15)  # Aguarde uma mensagem por até 10 segundos
                 if msg and msg.get_metadata("type") == "energy_differencial":
                     energy_differencial = float(msg.body)
                     if(energy_differencial<0):
@@ -59,7 +59,10 @@ class SolarBattery(Agent):  # Nome original restaurado
             energy_to_store = solar_energy_kwh * self.charge_efficiency
             available_space = self.capacity_kwh - self.current_charge_kwh
             energy_stored = min(energy_to_store, available_space)
-            energy_left = energy_stored-energy_to_store
+            if(energy_stored != 0):
+                energy_left = energy_to_store-energy_stored
+            else:
+                energy_left = solar_energy_kwh
             self.current_charge_kwh += energy_stored
             
             return energy_left
