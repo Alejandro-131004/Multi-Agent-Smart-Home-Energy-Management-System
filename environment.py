@@ -4,6 +4,8 @@ from spade.agent import Agent
 from spade.behaviour import CyclicBehaviour
 from spade.message import Message
 import asyncio
+from pytz import timezone, UTC
+
 
 class EnvironmentAgent(Agent):
     class EnvironmentBehaviour(CyclicBehaviour):
@@ -13,7 +15,6 @@ class EnvironmentAgent(Agent):
             msg = await self.receive(timeout=200)  # Wait until a message is received
             print(f"[env] Received message: {msg.body}")
             if msg:
-                
 
                 response = Message(to=str(msg.sender))  # Create a response message to the sender
                 response.set_metadata("performative", "inform")  # Metadata to define the message purpose
@@ -25,17 +26,27 @@ class EnvironmentAgent(Agent):
                         self.agent.date += pd.Timedelta(hours=1)
                         response.body = str(price)
                         response.set_metadata("type", "energy_price")
+
                     elif msg.metadata["type"] == "outside_temperature":
-                        wheater = self.agent.get_weather_for_each_hour()
-                        response.body = str(wheater)
+                        weather = self.agent.get_weather_for_each_hour()
+                        response.body = str(weather)  # Já em Celsius
                         response.set_metadata("type", "outside_temperature_response")
+
                     elif msg.metadata["type"] == "inside_temperature":
                         temp = self.agent.get_indoor_temperature()
                         response.set_metadata("type", "inside_temperature")
                         response.body = str(temp)
+
                     elif msg.metadata["type"] == "room_temperature_update":
                         self.agent.update_room_temperature(float(msg.body))
                         response.set_metadata("type", "room_temperature_response")
+
+                    elif msg.metadata["type"] == "temperature_data":
+                        inside_temp = self.agent.get_indoor_temperature()
+                        outside_temp = self.agent.get_weather_for_each_hour()  # Já em Celsius
+                        response.body = f"{inside_temp},{outside_temp}"
+                        response.set_metadata("type", "temperature_data")
+
                     else:
                         print(f"Unknown message type: {msg.metadata['type']}")
                         response.set_metadata("type", "error_response")
@@ -45,13 +56,10 @@ class EnvironmentAgent(Agent):
                     response.set_metadata("type", "error_response")
 
                 # Send the response message
-                if(msg.metadata["type"] != "room_temperature_update"):
+                if (msg.metadata["type"] != "room_temperature_update"):
                     await self.send(response)
                 print(f"[{self.agent.date}] Sent response: {response.body}")
 
-
-            
-    
     def __init__(self, jid, password, date, city, num_divisions, desired_temperature):
         super().__init__(jid, password)
         self.date = pd.to_datetime(date)  # Simulation date
@@ -60,113 +68,102 @@ class EnvironmentAgent(Agent):
         self.desired_temperature = desired_temperature
 
         # Placeholders for data to be loaded later
+        self.weather_time = None
         self.weather_data = None
         self.energy_data = None
         self.energy_prices = None
         self.season = None
         self.indoor_temperature = None
-        self.weather_hour = None
 
     async def setup(self):
+
         print(f"Agent {self.name} starting...")
         # Load initial data during setup
         self.weather_data = self.load_weather_data()
         self.energy_data = self.load_energy_data()
+
+        self.weather_time = self.get_weather_time()
         self.energy_prices = self.get_energy_prices()
+
         self.season = self.determine_season()
         self.indoor_temperature = self.set_standard_indoor_temperature()
-        self.weather_hour = self.get_weather_for_each_hour()
 
         # Add the cyclic behavior
         monitor_behaviour = self.EnvironmentBehaviour()
         self.add_behaviour(monitor_behaviour)
 
+    def convert_kelvin_to_celsius(self, kelvin):
+        try:
+            return round(kelvin - 273.15, 5)
+        except TypeError:
+            print(f"Erro ao converter {kelvin} para Celsius. Verifique os dados.")
+            return None
+
     def load_weather_data(self):
         try:
-            # Carrega os dados do CSV de clima, garantindo que 'dt_iso' é tratado como datetime com fuso horário
+            # Carrega os dados meteorológicos do CSV
             weather_df = pd.read_csv('weather_features.csv', parse_dates=['dt_iso'])
-            
             print("Dados meteorológicos carregados com sucesso:")
-            
-            # Verifica se a coluna dt_iso é do tipo datetime com timezone
-            if weather_df['dt_iso'].dtype != 'datetime64[ns, UTC]':
-                weather_df['dt_iso'] = pd.to_datetime(weather_df['dt_iso'], utc=True)
-
-            # Filtra os dados pela cidade
-            city_data = weather_df[weather_df['city_name'] == self.city]
-
-            # Verifique se self.date tem timezone, e ajusta para UTC se não tiver
-            if self.date.tzinfo is None:
-                self.date = self.date.tz_localize('UTC')
-            
-            # Normaliza ambas as datas para garantir que a comparação seja feita apenas até a hora exata
-            self.date = self.date.normalize()
-            city_data.loc[:, 'dt_iso'] = city_data['dt_iso'].dt.normalize()
-
-            # Filtra os dados com base na data/hora normalizada
-            filtered_data = city_data[city_data['dt_iso'] == self.date]
-            filtered_data= filtered_data.reset_index(drop=True)
-            print(f"Dados meteorológicos para {self.city} em {self.date}:")
-            print(filtered_data)  # Verifique o resultado da filtragem
-
-            if filtered_data.empty:
-                print("Nenhum dado meteorológico encontrado para esta data e hora.")
-                return None
-
-            # Conversão de temperatura de Kelvin para Celsius
-            filtered_data['temp'] -= 273.15  # Converte Kelvin para Celsius
-            filtered_data['temp_min'] -= 273.15  # Converte para Celsius
-            filtered_data['temp_max'] -= 273.15  # Converte para Celsius
-
-            return filtered_data.iloc[0]
+            print(weather_df.head())  # Exibe as primeiras linhas do DataFrame para debug
+            return weather_df
         except FileNotFoundError:
             print("O arquivo 'weather_features.csv' não foi encontrado.")
             return None
-        except Exception as e:
-            print(f"Ocorreu um erro: {e}")
-            return None
 
+    def get_weather_time(self):
+        if self.weather_data is not None:
+            # Converte a coluna de tempo para datetime
+            self.weather_data['dt_iso'] = pd.to_datetime(self.weather_data['dt_iso'], errors='coerce')
+
+            # Transforma em dicionário com 'dt_iso' como chave e 'temp' como valor
+            weather_dict = self.weather_data.set_index('dt_iso')['temp'].to_dict()
+
+            print("Dados meteorológicos processados com sucesso.")
+            return weather_dict
+        else:
+            print("Nenhum dado meteorológico disponível.")
+            return {}
 
     def get_weather_for_each_hour(self):
-        # Normaliza a hora atual para o início da hora (sem minutos, segundos, etc.)
+        # Normaliza a hora atual para o início da hora
         current_hour = self.date.replace(minute=0, second=0, microsecond=0)
         print(f"Consultando dados meteorológicos para a hora: {current_hour.isoformat()}")
 
         try:
-            # Primeiro, tenta buscar diretamente em UTC
-            current_hour_utc = current_hour.tz_convert('UTC')
-            weather_data = self.weather_data.get(current_hour_utc)
+            # Define o fuso horário UTC para a hora atual
+            current_hour_utc = UTC.localize(current_hour)
 
-            if weather_data is None:
-                print(f"Dados meteorológicos não encontrados em UTC, tentando UTC+1.")
-                # Tenta UTC+1 se não encontrar em UTC
-                current_hour_utc1 = current_hour.tz_convert('Europe/Berlin')  # UTC+1
-                weather_data = self.weather_data.get(current_hour_utc1)
+            # Converte para UTC+1 (Europe/Berlin)
+            current_hour_utc1 = current_hour_utc.astimezone(timezone('Europe/Berlin'))
+            print(f"Hora em UTC+1: {current_hour_utc1}")
 
-                if weather_data is None:
-                    print(f"Dados meteorológicos não encontrados em UTC+1, tentando UTC+2.")
-                    # Tenta UTC+2 se não encontrar em UTC+1
-                    current_hour_utc2 = current_hour.tz_convert('Europe/Istanbul')  # UTC+2
-                    weather_data = self.weather_data.get(current_hour_utc2)
+            # Busca os dados no dicionário
+            weather = self.weather_time.get(current_hour_utc1)
 
-                    if weather_data is not None:
-                        print(f"Dados meteorológicos encontrados em UTC+2: {weather_data}")
-                    else:
-                        print(f"Dados meteorológicos não encontrados em UTC+2.")
+            if weather is None:
+                print(f"Dados meteorológicos não encontrados em UTC+1, tentando UTC+2.")
+                # Converte para UTC+2 (Europe/Istanbul)
+                current_hour_utc2 = current_hour_utc.astimezone(timezone('Europe/Istanbul'))
+                print(f"Hora em UTC+2: {current_hour_utc2}")
+                weather = self.weather_time.get(current_hour_utc2)
+
+                if weather is not None:
+                    print(f"Dados meteorológicos encontrados em UTC+2: {weather}")
                 else:
-                    print(f"Dados meteorológicos encontrados em UTC+1: {weather_data}")
+                    print(f"Dados meteorológicos não encontrados em UTC+2.")
             else:
-                print(f"Dados meteorológicos encontrados em UTC: {weather_data}")
+                print(f"Dados meteorológicos encontrados em UTC+1: {weather}")
 
-            return weather_data
-
+            # Se encontrado, converte para Celsius antes de retornar
+            if weather is not None:
+                weather_celsius = self.convert_kelvin_to_celsius(weather)
+                print(f"Temperatura em Celsius: {weather_celsius:.5f}°C")
+                return weather_celsius
+            else:
+                return None
         except Exception as e:
-            print(f"Erro ao processar a data {self.date}: {e}")
+            print(f"Erro ao consultar os dados meteorológicos: {e}")
             return None
-
-
-
-
 
     def display_weather_data(self):
         if self.weather_data is not None:
@@ -180,7 +177,6 @@ class EnvironmentAgent(Agent):
             print(f"Weather: {self.weather_data['weather_description']}")
         else:
             print("No weather data available.")
-        
 
     def load_energy_data(self):
         try:
@@ -204,27 +200,29 @@ class EnvironmentAgent(Agent):
             return {}
 
     def get_price_for_current_hour(self):
-            current_hour = self.date.replace(minute=0, second=0, microsecond=0)
-            print(f"Consultando preço para a hora: {current_hour.isoformat()}")
+        current_hour = self.date.replace(minute=0, second=0, microsecond=0)
+        print(f"Consultando preço para a hora: {current_hour.isoformat()}")
 
-            # Como current_hour já tem fuso horário, use tz_convert em vez de tz_localize
-            current_hour_utc1 = current_hour.tz_convert('Europe/Berlin')  # UTC+1 para o inverno
-            price = self.energy_prices.get(current_hour_utc1)
+        # Como current_hour já tem fuso horário, use tz_convert em vez de tz_localize
+        # current_hour_utc1 = current_hour.tz_convert('Europe/Berlin')  # UTC+1 para o inverno ---- agora já nao dá erro mas vamos ver, foi a tal coisa que mudei sem querer
 
-            if price is None:
-                print(f"Preço não encontrado em UTC+1, tentando UTC+2.")
-                current_hour_utc2 = current_hour.tz_convert('Europe/Istanbul')  # UTC+2
-                price = self.energy_prices.get(current_hour_utc2)
+        current_hour_utc1 = current_hour.tz_localize('UTC').tz_convert('Europe/Berlin')  # UTC+1 para o inverno
 
-                if price is not None:
-                    print(f"Preço encontrado em UTC+2: {price}")
-                else:
-                    print(f"Preço não encontrado em UTC+2.")
+        price = self.energy_prices.get(current_hour_utc1)
+
+        if price is None:
+            print(f"Preço não encontrado em UTC+1, tentando UTC+2.")
+            current_hour_utc2 = current_hour.tz_convert('Europe/Istanbul')  # UTC+2
+            price = self.energy_prices.get(current_hour_utc2)
+
+            if price is not None:
+                print(f"Preço encontrado em UTC+2: {price}")
             else:
-                print(f"Preço encontrado em UTC+1: {price}")
+                print(f"Preço não encontrado em UTC+2.")
+        else:
+            print(f"Preço encontrado em UTC+1: {price}")
 
-            return price
-
+        return price
 
     def determine_season(self):
         month = self.date.month
@@ -253,10 +251,9 @@ class EnvironmentAgent(Agent):
 
     def verify_season(self):
         print(f"A data {self.date.date()} corresponde à estação: {self.season}.")
-        
-    def update_room_temperature(self,degrees_heated):
+
+    def update_room_temperature(self, degrees_heated):
         self.indoor_temperature += degrees_heated
-    
+
     def decrease_temperature(self):
-        self.indoor_temperature -= .5 #needs a function to load external temperature
-        
+        self.indoor_temperature -= .5  # needs a function to load external temperature

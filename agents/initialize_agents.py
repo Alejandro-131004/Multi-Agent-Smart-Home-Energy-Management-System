@@ -7,6 +7,7 @@ from agents.system_state import SystemState
 from agents.charger_EV import CarChargerAgent
 from environment import EnvironmentAgent
 from agents.washing_machine import WashingMachineAgent
+from agents.windows import WindowAgent
 import time
 import asyncio
 
@@ -39,7 +40,8 @@ async def start_agents(date, city, num_divisions, desired_temperature):
     fridge_agent = FridgeAgent("fridge@localhost", "password")
     solar_agent = SolarPanelAgent("solar@localhost", "password")
     washing_agent = WashingMachineAgent("washing@localhost", "password")
-    system_state = SystemState("system@localhost", "password", ["energy_agent@localhost", "heater@localhost", "solar@localhost", "fridge@localhost","washing@localhost"])
+    windows_agent = WindowAgent("windows@localhost", "password")
+    system_state = SystemState("system@localhost", "password", ["energy_agent@localhost", "heater@localhost", "solar@localhost", "fridge@localhost", "washing@localhost", "windows@localhost"])
 
     print("[DEBUG] All agents have been initialized.")
 
@@ -53,11 +55,14 @@ async def start_agents(date, city, num_divisions, desired_temperature):
     washing_agent.add_behaviour(WashingMachineAgent.WashingMachineBehaviour())
     print("[DEBUG] WashingMachineBehaviour foi adicionado ao WashingMachineAgent.")
 
+    windows_agent.add_behaviour(WindowAgent.WindowBehaviour())
+
     # Start agents
     await env_agent.start()
     await solar_battery.start()
     
     await heater_agent.start()
+    await windows_agent.start()
     await fridge_agent.start()
     await solar_agent.start()
     await washing_agent.start()
@@ -74,6 +79,7 @@ async def start_agents(date, city, num_divisions, desired_temperature):
             print("Encerrando agentes após 60 segundos.")
             await env_agent.stop()
             await heater_agent.stop()
+            await windows_agent.stop()
             await fridge_agent.stop()
             await system_state.stop()
             await washing_agent.stop()
