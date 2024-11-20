@@ -23,12 +23,15 @@ class EnvironmentAgent(Agent):
                 if msg.metadata and "type" in msg.metadata:
                     if msg.metadata["type"] == "energy_price_update":
                         price = self.agent.get_price_for_current_hour()
+                        print(self.agent.date)
                         self.agent.date += pd.Timedelta(hours=1)
+                        print(self.agent.date)
                         response.body = str(price)
                         response.set_metadata("type", "energy_price")
 
                     elif msg.metadata["type"] == "outside_temperature":
                         weather = self.agent.get_weather_for_each_hour()
+                        #self.agent.date += pd.Timedelta(hours=1)
                         response.body = str(weather)  # Já em Celsius
                         response.set_metadata("type", "outside_temperature_response")
 
@@ -109,7 +112,15 @@ class EnvironmentAgent(Agent):
         try:
             # Carrega os dados meteorológicos do CSV
             weather_df = pd.read_csv('weather_features.csv', parse_dates=['dt_iso'])
-            print("Dados meteorológicos carregados com sucesso:")
+
+            # Filtra os dados para a cidade especificada
+            weather_df = weather_df[weather_df['city_name'] == self.city]
+
+            if weather_df.empty:
+                print(f"Nenhum dado meteorológico encontrado para a cidade {self.city}.")
+                return None
+
+            print(f"Dados meteorológicos para {self.city} carregados com sucesso:")
             print(weather_df.head())  # Exibe as primeiras linhas do DataFrame para debug
             return weather_df
         except FileNotFoundError:
@@ -136,36 +147,22 @@ class EnvironmentAgent(Agent):
         print(f"Consultando dados meteorológicos para a hora: {current_hour.isoformat()}")
 
         try:
-            # Define o fuso horário UTC para a hora atual
-            current_hour_utc = UTC.localize(current_hour)
-
-            # Converte para UTC+1 (Europe/Berlin)
-            current_hour_utc1 = current_hour_utc.astimezone(timezone('Europe/Berlin'))
+            # Garante que o horário atual está em UTC+1 (como no CSV)
+            current_hour_utc1 = current_hour.tz_localize('Europe/Berlin', ambiguous='NaT')
             print(f"Hora em UTC+1: {current_hour_utc1}")
 
             # Busca os dados no dicionário
             weather = self.weather_time.get(current_hour_utc1)
 
-            if weather is None:
-                print(f"Dados meteorológicos não encontrados em UTC+1, tentando UTC+2.")
-                # Converte para UTC+2 (Europe/Istanbul)
-                current_hour_utc2 = current_hour_utc.astimezone(timezone('Europe/Istanbul'))
-                print(f"Hora em UTC+2: {current_hour_utc2}")
-                weather = self.weather_time.get(current_hour_utc2)
-
-                if weather is not None:
-                    print(f"Dados meteorológicos encontrados em UTC+2: {weather}")
-                else:
-                    print(f"Dados meteorológicos não encontrados em UTC+2.")
-            else:
-                print(f"Dados meteorológicos encontrados em UTC+1: {weather}")
-
-            # Se encontrado, converte para Celsius antes de retornar
             if weather is not None:
+                print(f"Dados meteorológicos encontrados: {weather} (em Kelvin)")
+
+                # Converte para Celsius antes de retornar
                 weather_celsius = self.convert_kelvin_to_celsius(weather)
                 print(f"Temperatura em Celsius: {weather_celsius:.5f}°C")
                 return weather_celsius
             else:
+                print(f"Dados meteorológicos não encontrados para {current_hour_utc1}.")
                 return None
         except Exception as e:
             print(f"Erro ao consultar os dados meteorológicos: {e}")
@@ -209,16 +206,15 @@ class EnvironmentAgent(Agent):
         current_hour = self.date.replace(minute=0, second=0, microsecond=0)
         print(f"Consultando preço para a hora: {current_hour.isoformat()}")
 
-        # Como current_hour já tem fuso horário, use tz_convert em vez de tz_localize
-        # current_hour_utc1 = current_hour.tz_convert('Europe/Berlin')  # UTC+1 para o inverno ---- agora já nao dá erro mas vamos ver, foi a tal coisa que mudei sem querer
-
-        current_hour_utc1 = current_hour.tz_localize('UTC').tz_convert('Europe/Berlin')  # UTC+1 para o inverno
+        # Localiza o timestamp como UTC+1
+        current_hour_utc1 = current_hour.tz_localize('Europe/Berlin',
+                                                     ambiguous='NaT')  # Ambiguous evita problemas com transições de horário de verão
 
         price = self.energy_prices.get(current_hour_utc1)
 
         if price is None:
             print(f"Preço não encontrado em UTC+1, tentando UTC+2.")
-            current_hour_utc2 = current_hour.tz_convert('Europe/Istanbul')  # UTC+2
+            current_hour_utc2 = current_hour_utc1.tz_convert('Europe/Istanbul')  # UTC+2
             price = self.energy_prices.get(current_hour_utc2)
 
             if price is not None:

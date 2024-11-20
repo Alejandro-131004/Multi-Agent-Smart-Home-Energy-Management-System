@@ -97,7 +97,11 @@ class WashingMachineAgent(Agent):
             """Adiciona roupas de forma aleatória à máquina de lavar."""
             new_clothes = random.randint(1, 5)  # Adiciona de 1 a 5 peças de roupa
             self.clothes_count += new_clothes
-            print(f"[Washing Machine] Added {new_clothes} clothes. Total: {self.clothes_count}/{self.box_capacity}")
+            if self.clothes_count <= self.box_capacity:
+                print(f"[Washing Machine] Added {new_clothes} clothes. Total: {self.clothes_count}/{self.box_capacity}")
+            else:
+                self.clothes_count = 0
+                print(f"[Washing Machine] The box is now empty, you can put on some clothes. Total: {self.clothes_count}/{self.box_capacity}")
 
         def calculate_consumption(self, consumption_amount, solar_energy_available, battery_status, energy_price):
             """Calcula a energia consumida durante o ciclo."""
