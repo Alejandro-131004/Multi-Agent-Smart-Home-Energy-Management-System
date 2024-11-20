@@ -3,9 +3,6 @@ from spade.behaviour import CyclicBehaviour
 from spade.message import Message
 import asyncio
 
-
-
-
 class HeaterAgent(Agent):
     def __init__(self, jid, password,desired_temperature):
         super().__init__(jid, password)
@@ -145,7 +142,7 @@ class HeaterAgent(Agent):
                     # Update the heating based on available energy
                     
                     degrees_heated = energy_power / self.agent.heating_power_per_degree
-                    msg = Message(to=env_agent_id)
+                    msg = Message(to="environment@localhost")
                     msg.set_metadata("performative", "request")
                     msg.set_metadata("type", "room_temperature_update_heat")  # Must match the receiver's check
                     msg.body = str(degrees_heated)

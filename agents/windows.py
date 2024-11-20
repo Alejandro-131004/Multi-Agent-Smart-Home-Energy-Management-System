@@ -53,7 +53,7 @@ class WindowAgent(Agent):
                 window_status = "closed"
 
             # Enviar status das janelas para outros agentes
-            for agent_id in ["heater@localhost", "aircon@localhost"]:
+            for agent_id in ["heater@localhost", "aircon@localhost", "environment@localhost"]:
                 msg = Message(to=agent_id)
                 msg.set_metadata("performative", "inform")
                 msg.set_metadata("type", "window_status")

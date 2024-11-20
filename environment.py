@@ -5,6 +5,7 @@ from spade.behaviour import CyclicBehaviour
 from spade.message import Message
 import asyncio
 from pytz import timezone, UTC
+import math
 
 
 class EnvironmentAgent(Agent):
@@ -18,7 +19,7 @@ class EnvironmentAgent(Agent):
 
                 response = Message(to=str(msg.sender))  # Create a response message to the sender
                 response.set_metadata("performative", "inform")  # Metadata to define the message purpose
-
+                print(f"[Env]{msg.metadata['type']}")
                 # Process the message based on its metadata
                 if msg.metadata and "type" in msg.metadata:
                     if msg.metadata["type"] == "energy_price_update":
@@ -48,6 +49,18 @@ class EnvironmentAgent(Agent):
                         self.agent.update_room_temperature_cold(float(msg.body))
                         response.set_metadata("type", "room_temperature_response_cold")
 
+                    elif msg.metadata["type"] == "window_status":
+                        window_open = False
+                        if (msg.body == "open"):
+                            window_open = True
+                            print("open heater")
+                        elif (msg.body == "closed"):
+                            print("closed heater")
+                            window_open = False
+                        self.agent.update_room_temperature_windows(window_open)
+                        print("entrei windows_status")
+                        response.set_metadata("type", "room_temperature_response_windows")
+
                     elif msg.metadata["type"] == "temperature_data":
                         inside_temp = self.agent.get_indoor_temperature()
                         outside_temp = self.agent.get_weather_for_each_hour()  # Já em Celsius
@@ -63,9 +76,9 @@ class EnvironmentAgent(Agent):
                     response.set_metadata("type", "error_response")
 
                 # Send the response message
-                if msg.metadata["type"] != "room_temperature_update_heat" and msg.metadata["type"] != "room_temperature_update_cold":
+                if response.metadata["type"] != "room_temperature_response_heat" and response.metadata["type"] != "room_temperature_response_cold" and response.metadata["type"] != "room_temperature_response_windows":
                     await self.send(response)
-                print(f"[{self.agent.date}] Sent response: {response.body}")
+                    #print(f"[{self.agent.date}] Sent response: {response.body}")
 
 
 
@@ -255,9 +268,32 @@ class EnvironmentAgent(Agent):
         print(f"A data {self.date.date()} corresponde à estação: {self.season}.")
 
     def update_room_temperature_heat(self, degrees_heated):
-        print("Ni")
         self.indoor_temperature += degrees_heated
 
     def update_room_temperature_cold(self, degrees_cooled):
-        print("niiiii")
         self.indoor_temperature -= degrees_cooled  # needs a function to load external temperature
+
+    def update_room_temperature_windows(self, window_status):
+
+        diff = self.get_weather_for_each_hour() - self.get_indoor_temperature()
+
+        cur_temp = self.get_indoor_temperature()
+
+        if window_status:
+            cur_temp += diff * 0.1
+
+            if cur_temp > self.desired_temperature and self.get_indoor_temperature() < self.desired_temperature:
+                self.indoor_temperature = round(self.desired_temperature, 2)
+
+            if cur_temp < self.desired_temperature and self.get_indoor_temperature() > self.desired_temperature:
+                self.indoor_temperature = round(self.desired_temperature, 2)
+
+        else:
+            self.indoor_temperature += diff * 0.01
+
+        # Arredonda para 2 casas decimais após a atualização
+        self.indoor_temperature = round(self.indoor_temperature, 2)
+
+
+
+
