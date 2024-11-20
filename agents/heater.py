@@ -18,6 +18,7 @@ class HeaterAgent(Agent):
         def __init__(self):
             super().__init__()
             self.energy_price = None
+            
             self.window_open = False
 
         async def run(self):
@@ -62,9 +63,13 @@ class HeaterAgent(Agent):
                     if msg and msg.get_metadata("type") == "window_status":
                         if(msg.body == "open"):
                             self.window_open = True
+                            print("open heater")
+                            break
                         elif(msg.body == "closed"):
+                            print("closed heater")
                             self.window_open = False
-                        break  # Saia do loop após processar a mensagem
+                            break
+                          # Saia do loop após processar a mensagem
                     elif msg:
                         print(f"[Heater] Ignored message with metadata type: {msg.get_metadata('type')}")
                     else:
@@ -86,7 +91,9 @@ class HeaterAgent(Agent):
                         try:
                             # Wait for the response from the SystemState agent
                             response = await self.receive(timeout=10)
-                            print("[Heater] Received message from system.")
+                            print(f"[Heater] Received message from system. {response.get_metadata('type')}")
+
+
 
                             
                             if response and response.get_metadata("type") == "energy_availablility":
@@ -98,6 +105,10 @@ class HeaterAgent(Agent):
             
                                 print ({max_grid_energy},"max grid energy")
                                 print(f"[Heater] Solar energy available: {solar_energy_available} kWh.")
+                                solar_used = 0
+                                battery_used = 0
+                                grid_used = 0
+                                energy_power = 0
                                 # Use solar energy first
                                 if solar_energy_available > 0:
                                     solar_used = min(solar_energy_available, energy_needed)
@@ -132,21 +143,19 @@ class HeaterAgent(Agent):
 
 
                     # Update the heating based on available energy
-                    if energy_power > 0:
-                        degrees_heated = energy_power / self.agent.heating_power_per_degree
-                        msg = Message(to=env_agent_id)
-                        msg.set_metadata("performative", "request")
-                        msg.set_metadata("type", "room_temperature_update_heat")  # Must match the receiver's check
-                        msg.body = str(degrees_heated)
-                        await self.send(msg)
-                        msg = Message(to="system@localhost")
-                        msg.set_metadata("performative", "inform")
-                        msg.set_metadata("type", "confirmation")
-                        msg.body = f"{energy_power},{0},{0}" # 0 needs to be replaced with the actual cost
-                        await self.send(msg)
-                        print(f"[Heater] Room temperature increased by {degrees_heated}°C.")
-                    else:
-                        print("[Heater] No energy available for heating.")
+                    
+                    degrees_heated = energy_power / self.agent.heating_power_per_degree
+                    msg = Message(to=env_agent_id)
+                    msg.set_metadata("performative", "request")
+                    msg.set_metadata("type", "room_temperature_update_heat")  # Must match the receiver's check
+                    msg.body = str(degrees_heated)
+                    await self.send(msg)
+                    
+                    msg = Message(to="system@localhost")
+                    msg.set_metadata("performative", "inform")
+                    msg.set_metadata("type", "confirmation")
+                    msg.body = f"{solar_used},{battery_used},{grid_used}" # 0 needs to be replaced with the actual cost
+                    await self.send(msg)
                 else:
                      print("[Heater] window open")
             else:

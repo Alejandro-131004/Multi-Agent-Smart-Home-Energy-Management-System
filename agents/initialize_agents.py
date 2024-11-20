@@ -36,7 +36,7 @@ async def start_agents(date, city, num_divisions, desired_temperature):
     print(f"       Date: {date}, City: {city}, Divisions: {num_divisions}, Desired Temperature: {desired_temperature}")
 
     # Initialize other agents
-    solar_battery = SolarBattery("solar_battery@localhost", "password", capacity_kwh=1000)
+    solar_battery = SolarBattery("solar_battery@localhost", "password", capacity_kwh=10)
     heater_agent = HeaterAgent("heater@localhost", "password", desired_temperature)
     fridge_agent = FridgeAgent("fridge@localhost", "password")
     solar_agent = SolarPanelAgent("solar@localhost", "password")

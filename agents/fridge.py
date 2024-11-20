@@ -51,20 +51,18 @@ class FridgeAgent(Agent):
             # Consumo fixo do refrigerador
             consumption_amount = 0.5  # Consumo fixo para este ciclo
 
-            if energy_price is not None:
-                # Calcular o consumo de energia
-                solar_energy_consumed,battery_energy_comsumed, cost = self.calculate_consumption(
-                    consumption_amount, solar_energy_available,battery_status, energy_price
-                )
-                print(f"[Fridge] Consuming energy... Solar: {solar_energy_consumed} kWh,battery:{battery_energy_comsumed}, Cost: {cost} €")
-                # Enviar mensagem de confirmação ao SystemState
-                msg = Message(to="system@localhost")
-                msg.set_metadata("performative", "inform")
-                msg.set_metadata("type", "confirmation")
-                msg.body = f"{solar_energy_consumed},{battery_energy_comsumed},{cost}" 
-                await self.send(msg)
-            else:
-                print("[Fridge] Energy price unavailable. Cannot calculate cost.")
+            
+            # Calcular o consumo de energia
+            solar_energy_consumed,battery_energy_comsumed, cost = self.calculate_consumption(
+                consumption_amount, solar_energy_available,battery_status, energy_price
+            )
+            print(f"[Fridge] Consuming energy... Solar: {solar_energy_consumed} kWh,battery:{battery_energy_comsumed}, Cost: {cost} €")
+            # Enviar mensagem de confirmação ao SystemState
+            msg = Message(to="system@localhost")
+            msg.set_metadata("performative", "inform")
+            msg.set_metadata("type", "confirmation")
+            msg.body = f"{solar_energy_consumed},{battery_energy_comsumed},{cost}" 
+        
 
             # Simular tempo de espera antes do próximo ciclo
             await asyncio.sleep(0.1)  # Ajuste a duração conforme necessário

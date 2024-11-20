@@ -103,21 +103,21 @@ class SystemState(Agent):
         
         async def notify_agent(self, agent_id: str):
             # Check if there is available solar energy
-            if self.solar_energy_left > 0:
-                # Check if the agent is in the priority list
-                if agent_id in self.agent.agent_priorities:
-                    print(f"[SystemState] Notifying {agent_id} to execute with available solar energy.")
-                    
-                    # Create a message to send to the agent
-                    msg = Message(to=str(agent_id))
-                    msg.set_metadata("performative", "inform")
-                    msg.set_metadata("type", "energy_availablility")
-                    
-                    # Include solar energy, battery charge, and energy price as comma-separated values
-                    msg.body = f"{self.solar_energy_left},{self.battery_charge},{self.energy_price}"
-                    
-                    await self.send(msg)  # Send the message
-                    print(f"[SystemState] Sent solar energy notification to {agent_id} with details: {msg.body}.")
+           
+            # Check if the agent is in the priority list
+            if agent_id in self.agent.agent_priorities:
+                print(f"[SystemState] Notifying {agent_id} to execute with available solar energy.")
+                
+                # Create a message to send to the agent
+                msg = Message(to=str(agent_id))
+                msg.set_metadata("performative", "inform")
+                msg.set_metadata("type", "energy_availablility")
+                
+                # Include solar energy, battery charge, and energy price as comma-separated values
+                msg.body = f"{self.solar_energy_left},{self.battery_charge},{self.energy_price}"
+                
+                await self.send(msg)  # Send the message
+                print(f"[SystemState] Sent solar energy notification to {agent_id} with details: {msg.body}.")
 
 
         async def process_messages1(self):

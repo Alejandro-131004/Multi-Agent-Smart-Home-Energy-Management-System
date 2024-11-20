@@ -86,7 +86,9 @@ class SolarPanelAgent(Agent):
             solar_generation = self.energy_data.iloc[self.current_index]['generation solar']
             print(f"[SolarPanel] Row {self.current_index}, Solar Generation: {solar_generation} kWh.")
             self.current_index += 1  # Move to the next row
-            return solar_generation
+            if(solar_generation < 250):
+                return 0
+            return solar_generation/1000
         else:
             print("[Solar Panel] All data has been processed.")
             return 0  # If there is no more data, return 0
