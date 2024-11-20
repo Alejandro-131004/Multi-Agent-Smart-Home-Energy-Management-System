@@ -59,9 +59,25 @@ class WindowAgent(Agent):
                 msg.set_metadata("type", "window_status")
                 msg.body = window_status
                 await self.send(msg)
+            while True:
+                msg = await self.receive(timeout=10)  # Wait for a message for up to 10 seconds
+                print("window states")
+                
+                if msg:
+                    msg_type = msg.get_metadata("type")
+                    if msg_type == "state_request":
+                        # Handle state request and reply with the window status
+                        response = Message(to="system@localhost")
+                        response.set_metadata("performative", "inform")
+                        response.set_metadata("type", "state_response")
+                        response.body = window_status  # Assume window_status is defined elsewhere
+                        await self.send(response)
+                    else:
+                        print(f"[Window] Ignored message with metadata type: {msg_type}.")
+                else:
+                    print("[Window] No message received within the timeout.")
 
-            await asyncio.sleep(1)
-
+                     
     async def setup(self):
         print("[WindowAgent] Agent starting...")
         behaviour = self.WindowBehaviour()

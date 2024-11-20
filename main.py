@@ -7,8 +7,8 @@ from agents.initialize_agents import start_agents
 def start_agents_gui():
     try:
         # Get input values
-        start_date = date_entry.get() or '2015-01-01 00:00:00'
-        city = city_entry.get() or 'Valencia'
+        start_date = date_entry.get() or '2015-01-01 14:00:00'
+        city = city_entry.get() or 'Madrid'
         num_divisions = int(divisions_entry.get() or 5)
         desired_temperature = float(temp_entry.get() or 40.0)
         
@@ -61,3 +61,4 @@ start_button.grid(row=4, column=0, columnspan=2, pady=10)
 
 # Run the GUI event loop
 root.mainloop()
+

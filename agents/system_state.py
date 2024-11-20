@@ -2,6 +2,10 @@ import pandas as pd
 import asyncio
 import csv
 import os
+from math import isnan
+import tkinter as tk
+from tkinter import messagebox
+from tkinter import ttk
 from datetime import datetime, timedelta
 from queue import PriorityQueue
 from spade.agent import Agent
@@ -19,7 +23,7 @@ class SystemState(Agent):
         self.current_agent: Optional[str] = None
         self.agent_priorities = {}
         self.agents_left = 0
-        self.state = 0
+        self.state = -1
         self.energy_confirm = 0
         self.solar_confirm = 0
         self.battery_confirm = 0
@@ -30,6 +34,9 @@ class SystemState(Agent):
         self.maxdisatisfaction = 0
         self.totaldisatisfaction = 0
         self.totalrequests = 0
+
+        
+    
     class CyclicStateBehaviour(CyclicBehaviour):
         def __init__(self):
             super().__init__()
@@ -41,7 +48,20 @@ class SystemState(Agent):
             self.battery_charge = 0.0
             self.battery_used = 0.0
             self.energy_price = 0.0 
+            self.agent_states = {}
+            self.system_state = {
+            "inside_temperature": 22.5,  # Default value
+            "outside_temperature": 15.0,  # Default value
+            "energy_price": 0.12,  # Default price per kWh
+            "solar_production": 5.0,  # Default solar production in kW
+            "battery_charge " : 0
+        }
+    
+        
         async def run(self):
+            if self.agent.state == -1:
+                  self.initialize_agent_states()
+                  self.agent.state = 0
             if self.agent.state == 0:
                 await self.request_energy_price()  # Call directly in run
                 await self.request_solar_production()  # Call directly in run
@@ -52,6 +72,22 @@ class SystemState(Agent):
                 await self.broadcast()
                 await self.process_messages2()
                 self.log_system_metrics()
+                await self.update_agent_states()
+                env_agent_id = "environment@localhost"
+                msg = Message(to=env_agent_id)
+                msg.set_metadata("performative", "request")
+                msg.set_metadata("type", "temperature_data")
+                await self.send(msg)
+
+                # Receber temperaturas externa e interna
+                while True:
+                    response = await self.receive(timeout=10)
+                    if response and response.get_metadata("type") == "temperature_data":
+                        inside_temp, outside_temp = map(float, response.body.split(","))
+                        self.system_state["inside_temperature"] = inside_temp
+                        self.system_state["outside_temperature"] = outside_temp
+                        break
+                self.display_agent_states_gui()
                 self.agent.state = 0
                 self.agent.solar_confirm = 0
                 self.agent.battery_confirm = 0
@@ -136,10 +172,9 @@ class SystemState(Agent):
         
         async def process_messages2(self):
             print("[SystemState] Collecting messages2...")
-            self.battery_used = 0
+            self.battery_used = 0  # Reset battery_used for each loop iteration
 
-            # Process incoming messages
-            while True:  
+            while True:
                 print("Checking for incoming messages...")
                 msg = await self.receive(timeout=2)
                 if msg:
@@ -149,7 +184,6 @@ class SystemState(Agent):
                     print("[SystemState] No message received within timeout. Breaking loop.")
                     break
 
-            # Process the priority queue
             while not self.agent.priority_queue.empty():
                 if self.agent.agents_left == 0:
                     print("[SystemState] All agents have responded. Moving to the next cycle.")
@@ -159,13 +193,14 @@ class SystemState(Agent):
                 await self.notify_agent(agent_id)
 
                 # Wait for confirmation
-                print(f"[SystemState] Waiting for confirmation from {agent_id}...")
-                try:
-                    msg = await self.receive(timeout=3)
-                    if msg and self.agent.state == 1:
+                while True:
+                    print(f"[SystemState] Waiting for confirmation from {agent_id}...")
+                    msg = await self.receive(timeout=5)
+                    if msg:
                         await self.receive_message2(msg)
-                except asyncio.TimeoutError:
-                    print(f"[SystemState] Timeout waiting for confirmation from {agent_id}. Continuing...")
+                        break
+                    else:
+                        break  # Exit loop once the message is processed
 
             # Send energy differential to battery agent
             energy_left = self.solar_energy_left - self.battery_used
@@ -180,9 +215,10 @@ class SystemState(Agent):
             self.energy_to_sell = 0
             msg = await self.receive(timeout=1)
             if msg and msg.get_metadata("type") == "energy_to_sell":
-                self.energy_to_sell = float(msg.body)  
+                self.energy_to_sell = float(msg.body)
             self.agent.total_energy_wasted += self.energy_to_sell
-            self.agent.total_energy_revenue += self.energy_to_sell*self.energy_price*.5
+            self.agent.total_energy_revenue += self.energy_to_sell * self.energy_price * 0.5
+
         async def receive_message1(self, xmpp_message: Message):
             """Route incoming messages based on type."""
             msg_type = xmpp_message.get_metadata("type")
@@ -202,32 +238,26 @@ class SystemState(Agent):
 
         async def receive_message2(self, xmpp_message: Message):
             print("Message received!")
-            """Route incoming messages based on type."""
-            
-            # Get the message type
             msg_type = xmpp_message.get_metadata("type")
-            
-            # Check if the message type is "confirmation" and handle comma-separated values
+
             if msg_type == "confirmation":
                 try:
-                    # Split and unpack the body directly into solar_used, battery_used, and cost
                     solar_used, battery_used, cost = map(float, xmpp_message.body.split(","))
                     print(f"[SystemState] Confirmation received. Solar used: {solar_used} kWh, Battery used: {battery_used} kWh, Cost: {cost} €.")
+                    self.update_agent_usage(xmpp_message.sender, battery_used, solar_used, cost)
                     self.handle_confirmation(xmpp_message.sender, solar_used, battery_used, cost)
                 except ValueError:
                     self.agent.agents_left -= 1
                     print("[SystemState] Error parsing confirmation message body.")
-
             else:
                 try:
-                    # For other message types, assume a single value
                     data = float(xmpp_message.body)
                     if msg_type == "priority":
                         self.update_priority(xmpp_message.sender, data)
                         self.agent.agents_left += 1
-                        self.agent.totalrequests +=1
+                        self.agent.totalrequests += 1
                         self.agent.totaldisatisfaction += 1
-                        if(data > self.agent.maxdisatisfaction):
+                        if data > self.agent.maxdisatisfaction:
                             self.agent.maxdisatisfaction = data
                     else:
                         print(f"[SystemState] Unknown message type: {msg_type}.")
@@ -235,32 +265,36 @@ class SystemState(Agent):
                     print(f"[SystemState] Error parsing message body for type {msg_type}.")
 
 
-        def handle_confirmation(self, sender: str, energy_used: float,battery_used: float,cost: float):
-            """Handle confirmation of energy usage and update solar energy."""
+        def handle_confirmation(self, sender: str, energy_used: float, battery_used: float, cost: float):
+            if battery_used < 0 or energy_used < 0 or cost < 0:
+                print("[SystemState] Invalid values received in confirmation.")
+                return
+
             print(f"[SystemState] Received confirmation from {sender} for {energy_used} kWh energy used, and a total cost of {cost}€")
             self.agent.total_cost += cost
-            # Update solar energy after confirmed usage
-            self.solar_energy_left = max(0.0, self.solar_energy_left - energy_used) #evita valores negativos
+            self.solar_energy_left = max(0.0, self.solar_energy_left - energy_used)
             self.solar_energy_used += energy_used
             self.cost += cost
-            self.energy_bought += cost/self.energy_price
+            self.energy_bought += cost / self.energy_price
             self.battery_charge -= battery_used
             self.battery_used += battery_used
             self.agent.agents_left -= 1
-            
-            print(f"[SystemState] Solar energy after usage by {sender}: {self.solar_energy_left} kWh.")
+
 
         def update_energy_price(self, new_price: float):
+            self.system_state["energy_price"] = new_price
             self.energy_price = new_price
             print(f"[SystemState] Energy price updated to {self.energy_price} €/kWh.")
 
         def update_battery_charge(self, amount: float):
             self.battery_charge = amount
+            self.system_state["battery_charge"] = amount
             self.battery_used = 0
             print(f"[SystemState] Battery charge updated to {self.battery_charge} kWh.")
 
         def update_solar_energy(self, amount: float):
             self.solar_energy_left = amount
+            self.system_state["solar_production"] = amount
             print(f"[SystemState] Solar energy updated to {self.solar_energy_left} kWh.")
 
         def update_priority(self, agent_id: str, priority: float):
@@ -321,3 +355,198 @@ class SystemState(Agent):
             self.current_timestamp += timedelta(hours=1)
 
             print(f"[SystemState] Metrics logged to {csv_file}: {metrics_data}")
+            
+    
+        def initialize_agent_states(self):
+            """
+            Initializes self.agent_states for all agents with default values.
+            """
+            for agent_id in self.agent.agents:
+                normalized_id = self.normalize_agent_id(agent_id)
+                if normalized_id not in self.agent_states:
+                    self.agent_states[normalized_id] = {
+                        "state": "Pending",  # Default placeholder for state
+                        "battery_used": "Pending",  # Placeholder for battery usage
+                        "solar_used": "Pending",  # Placeholder for solar usage
+                        "cost": "Pending",  # Placeholder for cost
+                        "is_complete": False,  # Indicates if all data has been received
+                    }
+
+        def normalize_agent_id(self, agent_id):
+            """
+            Ensures the agent ID is consistently formatted.
+            """
+            # Ensure that agent_id is a string and print the type for debugging
+            agent_id = str(agent_id)  # Convert to string to ensure consistency
+            print(f"Normalized agent_id (type: {type(agent_id)}): {agent_id}")  # Debugging output
+            return agent_id.replace(" ", "").lower()
+
+
+        def update_agent_usage(self, agent, battery_used=None, solar_used=None, cost=None):
+            """
+            Updates the battery, solar, and cost data for an agent.
+            """
+            agent = self.normalize_agent_id(agent)
+            if agent not in self.agent_states:
+                self.agent_states[agent] = {
+                    "state": "Pending",
+                    "battery_used": "Pending",
+                    "solar_used": "Pending",
+                    "cost": "Pending",
+                    "is_complete": False,
+                }
+            # Update usage fields
+            if battery_used is not None:
+                self.agent_states[agent]["battery_used"] = float(battery_used)
+            if solar_used is not None:
+                self.agent_states[agent]["solar_used"] = float(solar_used)
+            if cost is not None:
+                self.agent_states[agent]["cost"] = float(cost)
+
+
+        async def update_agent_states(self):
+            """
+            Sends state request messages to all agents and updates the state of the ones that respond.
+            """
+            # Send requests to all agents
+            for agent_id in self.agent.agents:
+                msg = Message(to=agent_id)  # Create a message
+                msg.set_metadata("performative", "request")  # Set the type of message
+                msg.set_metadata("type", "state_request")  # Add a custom metadata
+                msg.body = "Requesting current state"  # Add a body message
+                await self.send(msg)  # Send the message
+                print(f"State request sent to {agent_id}")
+
+            # Wait for responses
+            pending_agents = set(self.agent.agents)  # Track agents that are pending responses
+
+            while pending_agents:
+                response = await self.receive(timeout=5)  # Wait for a response with a timeout
+                if response:
+                    sender_id = self.normalize_agent_id(str(response.sender))  # Normalize sender ID
+                    if sender_id in pending_agents:
+                        # Update state from response
+                        self.agent_states[sender_id]["state"] = response.body
+                        print(f"Updated state for {sender_id}: {response.body}")
+                        pending_agents.remove(sender_id)
+
+                        # Check completeness
+                        if self.agent_states[sender_id]["state"] != "Pending" and \
+                        self.agent_states[sender_id]["battery_used"] != "Pending" and \
+                        self.agent_states[sender_id]["solar_used"] != "Pending" and \
+                        self.agent_states[sender_id]["cost"] != "Pending":
+                            self.agent_states[sender_id]["is_complete"] = True
+                    else:
+                        print(f"Unexpected response from {sender_id}, ignoring.")
+                else:
+                    # If no response, log a timeout and stop waiting
+                    print("No response received within timeout.")
+                    break
+
+
+        def display_agent_states_gui(self):
+            """
+            Creates a GUI to display agent states and system-wide states, and allows resetting states and updating preferences.
+            """
+            import tkinter as tk
+            from tkinter import ttk, messagebox
+            from datetime import datetime
+
+            def reset_states():
+                """Resets 'battery_used', 'solar_used', 'cost', and 'battery_charge' fields to 'N/A'."""
+                for agent in self.agent_states:
+                    if isinstance(self.agent_states[agent], dict):
+                        self.agent_states[agent]["battery_used"] = "N/A"
+                        self.agent_states[agent]["solar_used"] = "N/A"
+                        self.agent_states[agent]["cost"] = "N/A"
+                self.system_state["battery_charge"] = "N/A"
+                root.destroy()
+
+            def update_preferences():
+                """Opens a new window to update preferences."""
+                def save_preferences():
+                    try:
+                        # Get input values
+                        start_date = date_entry.get() or '2015-01-01 00:00:00'
+                        city = city_entry.get() or 'Madrid'
+                        num_divisions = int(divisions_entry.get() or 5)
+                        desired_temperature = float(temp_entry.get() or 40.0)
+                        
+                        # Validate date format
+                        try:
+                            datetime.strptime(start_date, '%Y-%m-%d %H:%M:%S')
+                        except ValueError:
+                            messagebox.showerror("Error", "Invalid date format. Please use YYYY-MM-DD HH:MM:SS.")
+                            return
+                        
+                        # Log updated preferences
+                        print(f"Updated Preferences: Start Date={start_date}, City={city}, Divisions={num_divisions}, Temp={desired_temperature}")
+                        preferences_window.destroy()
+                    except ValueError as e:
+                        messagebox.showerror("Error", f"Invalid input: {e}")
+
+                preferences_window = tk.Toplevel(root)
+                preferences_window.title("Update Preferences")
+
+                tk.Label(preferences_window, text="Start Date (YYYY-MM-DD HH:MM:SS):").grid(row=0, column=0, padx=10, pady=5, sticky="e")
+                date_entry = tk.Entry(preferences_window, width=25)
+                date_entry.grid(row=0, column=1, padx=10, pady=5)
+
+                tk.Label(preferences_window, text="City:").grid(row=1, column=0, padx=10, pady=5, sticky="e")
+                city_entry = tk.Entry(preferences_window, width=25)
+                city_entry.grid(row=1, column=1, padx=10, pady=5)
+
+                tk.Label(preferences_window, text="Number of Divisions:").grid(row=2, column=0, padx=10, pady=5, sticky="e")
+                divisions_entry = tk.Entry(preferences_window, width=25)
+                divisions_entry.grid(row=2, column=1, padx=10, pady=5)
+
+                tk.Label(preferences_window, text="Desired Temperature:").grid(row=3, column=0, padx=10, pady=5, sticky="e")
+                temp_entry = tk.Entry(preferences_window, width=25)
+                temp_entry.grid(row=3, column=1, padx=10, pady=5)
+
+                save_button = tk.Button(preferences_window, text="Save Preferences", command=save_preferences)
+                save_button.grid(row=4, column=0, columnspan=2, pady=10)
+
+            root = tk.Tk()
+            root.title("Agent States and System State")
+
+            # Create Treeview with system state
+            tree = ttk.Treeview(root, columns=("Agent", "State", "Battery Used", "Solar Used", "Cost", 
+                                            "Inside Temp", "Outside Temp", "Energy Price", "Solar Production", "Battery Charge"), 
+                                show="headings")
+            tree.heading("Agent", text="Agent")
+            tree.heading("State", text="State")
+            tree.heading("Battery Used", text="Battery Used")
+            tree.heading("Solar Used", text="Solar Used")
+            tree.heading("Cost", text="Cost")
+            tree.heading("Inside Temp", text="Inside Temp")
+            tree.heading("Outside Temp", text="Outside Temp")
+            tree.heading("Energy Price", text="Energy Price")
+            tree.heading("Solar Production", text="Solar Production")
+            tree.heading("Battery Charge", text="Battery Charge")
+            tree.pack(fill=tk.BOTH, expand=True)
+
+            # Fill Treeview
+            for agent, state in self.agent_states.items():
+                battery_charge = self.system_state.get("battery_charge", "N/A")
+                if isinstance(state, dict):
+                    tree.insert("", tk.END, values=(agent, state.get("state", "N/A"), state.get("battery_used", "N/A"),
+                                                    state.get("solar_used", "N/A"), state.get("cost", "N/A"),
+                                                    self.system_state.get("inside_temperature", "N/A"), 
+                                                    self.system_state.get("outside_temperature", "N/A"),
+                                                    self.system_state.get("energy_price", "N/A"),
+                                                    self.system_state.get("solar_production", "N/A"), 
+                                                    battery_charge))
+                else:
+                    tree.insert("", tk.END, values=(agent, state, "N/A", "N/A", "N/A",
+                                                    self.system_state.get("inside_temperature", "N/A"), 
+                                                    self.system_state.get("outside_temperature", "N/A"),
+                                                    self.system_state.get("energy_price", "N/A"),
+                                                    self.system_state.get("solar_production", "N/A"), 
+                                                    battery_charge))
+
+            tk.Button(root, text="Close", command=reset_states).pack(pady=5)
+            tk.Button(root, text="Update Preferences", command=update_preferences).pack(pady=5)
+
+            root.mainloop()
+

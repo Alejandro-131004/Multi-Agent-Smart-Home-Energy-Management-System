@@ -12,6 +12,7 @@ class FridgeAgent(Agent):
             super().__init__()
             self.consumption = 0.0  # Total energy consumption initialized to 0
             self.priority = 0
+            self.status = "on"
 
         async def run(self):
             energy_price = None
@@ -62,7 +63,22 @@ class FridgeAgent(Agent):
             msg.set_metadata("performative", "inform")
             msg.set_metadata("type", "confirmation")
             msg.body = f"{solar_energy_consumed},{battery_energy_comsumed},{cost}" 
-        
+            await self.send(msg)
+            msg = await self.receive(timeout=10)  # Wait for a message for up to 10 seconds
+            if msg:
+                msg_type = msg.get_metadata("type")
+                if msg_type == "state_request":
+                    # Handle state request and reply with the fridge status
+                    response = Message(to="system@localhost")
+                    response.set_metadata("performative", "inform")
+                    response.set_metadata("type", "state_response")
+                    response.body = self.status
+                    await self.send(response)
+                    print(f"[Fridge] Sent state response: {self.status} to {msg.sender}.")
+                else:
+                    print(f"[Fridge] Ignored message with metadata type: {msg_type}.")
+            else:
+                print("[Fridge] No message received within the timeout.")
 
             # Simular tempo de espera antes do próximo ciclo
             await asyncio.sleep(0.1)  # Ajuste a duração conforme necessário

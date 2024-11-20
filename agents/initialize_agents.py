@@ -43,7 +43,7 @@ async def start_agents(date, city, num_divisions, desired_temperature):
     washing_agent = WashingMachineAgent("washing@localhost", "password")
     windows_agent = WindowAgent("windows@localhost", "password", desired_temperature)
     aircon_agent = AirconAgent("aircon@localhost", "password", desired_temperature)
-    system_state = SystemState("system@localhost", "password", ["energy_agent@localhost", "heater@localhost", "solar@localhost", "fridge@localhost", "washing@localhost", "windows@localhost", "aircon@localhost"])
+    system_state = SystemState("system@localhost", "password", [ "heater@localhost", "fridge@localhost", "washing@localhost", "windows@localhost", "aircon@localhost"])
 
     print("[DEBUG] All agents have been initialized.")
 

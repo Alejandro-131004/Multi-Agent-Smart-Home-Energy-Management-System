@@ -88,7 +88,7 @@ class HeaterAgent(Agent):
                         try:
                             # Wait for the response from the SystemState agent
                             response = await self.receive(timeout=10)
-                            print(f"[Heater] Received message from system. {response.get_metadata('type')}")
+                            print(f"[Heater] Received message from system. ")#{response.get_metadata('type')}")
 
 
 
@@ -140,7 +140,11 @@ class HeaterAgent(Agent):
 
 
                     # Update the heating based on available energy
-                    
+                    msg = Message(to="system@localhost")
+                    msg.set_metadata("performative", "inform")
+                    msg.set_metadata("type", "confirmation")
+                    msg.body = f"{solar_used},{battery_used},{grid_used}" # 0 needs to be replaced with the actual cost
+                    await self.send(msg)
                     degrees_heated = energy_power / self.agent.heating_power_per_degree
                     msg = Message(to="environment@localhost")
                     msg.set_metadata("performative", "request")
@@ -148,18 +152,36 @@ class HeaterAgent(Agent):
                     msg.body = str(degrees_heated)
                     await self.send(msg)
                     
-                    msg = Message(to="system@localhost")
-                    msg.set_metadata("performative", "inform")
-                    msg.set_metadata("type", "confirmation")
-                    msg.body = f"{solar_used},{battery_used},{grid_used}" # 0 needs to be replaced with the actual cost
-                    await self.send(msg)
+                    
                 else:
                      print("[Heater] window open")
+
             else:
                 print("[Heater] Comfortable temperature, no heating needed.")
+            
+            while True:
+                msg = await self.receive(timeout=10)  # Wait for a message for up to 10 seconds
+                
+                if msg:
+                    msg_type = msg.get_metadata("type")
+                    if msg_type == "state_request":
+                        # Handle state request and reply with the heater status
+                        response = Message(to="system@localhost")
+                        response.set_metadata("performative", "inform")
+                        response.set_metadata("type", "state_response")
+                        
+                        if degrees_heated > 0:
+                            response.body = "on"
+                        else:
+                            response.body = "off"
+                            
+                        await self.send(response)
+                    else:
+                        print(f"[Heater] Ignored message with metadata type: {msg_type}.")
+                else:
+                    print("[Heater] No message received within the timeout.")
 
-            await asyncio.sleep(0.1)  # Wait before the next iteration
-
+                      
         def calculate_priority(self, dissatisfaction):
             """Calculates dynamic priority based on dissatisfaction and base priority."""
             return self.agent.base_priority + dissatisfaction  # Efmaxample of priority calculation
