@@ -24,12 +24,15 @@ class EnvironmentAgent(Agent):
                 if msg.metadata and "type" in msg.metadata:
                     if msg.metadata["type"] == "energy_price_update":
                         price = self.agent.get_price_for_current_hour()
+                        print(self.agent.date)
                         self.agent.date += pd.Timedelta(hours=1)
+                        print(self.agent.date)
                         response.body = str(price)
                         response.set_metadata("type", "energy_price")
 
                     elif msg.metadata["type"] == "outside_temperature":
                         weather = self.agent.get_weather_for_each_hour()
+                        #self.agent.date += pd.Timedelta(hours=1)
                         response.body = str(weather)  # Já em Celsius
                         response.set_metadata("type", "outside_temperature_response")
 
@@ -84,7 +87,6 @@ class EnvironmentAgent(Agent):
     def __init__(self, jid, password, date, city, num_divisions, desired_temperature):
         super().__init__(jid, password)
         self.date = pd.to_datetime(date)  # Simulation date
-        print(f"{date}abc")
         self.city = city
         self.num_divisions = num_divisions
         self.desired_temperature = desired_temperature
@@ -168,11 +170,11 @@ class EnvironmentAgent(Agent):
             weather = self.weather_time.get(current_hour_utc1)
 
             if weather is not None:
-                print(f"Dados meteorológicos encontrados: {weather} (em Kelvin)")
+                print(f"Dados meteorológicos encontrados: {weather:.2f} (em Kelvin)")
 
                 # Converte para Celsius antes de retornar
                 weather_celsius = self.convert_kelvin_to_celsius(weather)
-                print(f"Temperatura em Celsius: {weather_celsius:.5f}°C")
+                print(f"Temperatura em Celsius: {weather_celsius:.2f}°C")
                 return weather_celsius
             else:
                 print(f"Dados meteorológicos não encontrados para {current_hour_utc1}.")
@@ -274,26 +276,18 @@ class EnvironmentAgent(Agent):
         self.indoor_temperature -= degrees_cooled  # needs a function to load external temperature
 
     def update_room_temperature_windows(self, window_status):
-
         diff = self.get_weather_for_each_hour() - self.get_indoor_temperature()
-
         cur_temp = self.get_indoor_temperature()
-
         if window_status:
             cur_temp += diff * 0.1
-
             if cur_temp > self.desired_temperature and self.get_indoor_temperature() < self.desired_temperature:
+                self.indoor_temperature = round(self.desired_temperature, 2)
+
+            if cur_temp > self.desired_temperature and self.get_indoor_temperature() > self.desired_temperature:
                 self.indoor_temperature = round(self.desired_temperature, 2)
 
             if cur_temp < self.desired_temperature and self.get_indoor_temperature() > self.desired_temperature:
                 self.indoor_temperature = round(self.desired_temperature, 2)
-
         else:
             self.indoor_temperature += diff * 0.01
-
-        # Arredonda para 2 casas decimais após a atualização
         self.indoor_temperature = round(self.indoor_temperature, 2)
-
-
-
-
