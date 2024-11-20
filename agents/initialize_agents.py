@@ -54,7 +54,7 @@ async def start_agents(date, city, num_divisions, desired_temperature):
     aircon_agent.add_behaviour(AirconAgent.AirconBehaviour())
     washing_agent.add_behaviour(WashingMachineAgent.WashingMachineBehaviour())
     #print("[DEBUG] WashingMachineBehaviour foi adicionado ao WashingMachineAgent.")
-    windows_agent.add_behaviour(WindowAgent.WindowBehaviour())
+    #windows_agent.add_behaviour(WindowAgent.WindowBehaviour())
 
 
     # Start agents

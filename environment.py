@@ -24,15 +24,12 @@ class EnvironmentAgent(Agent):
                 if msg.metadata and "type" in msg.metadata:
                     if msg.metadata["type"] == "energy_price_update":
                         price = self.agent.get_price_for_current_hour()
-                        print(self.agent.date)
                         self.agent.date += pd.Timedelta(hours=1)
-                        print(self.agent.date)
                         response.body = str(price)
                         response.set_metadata("type", "energy_price")
 
                     elif msg.metadata["type"] == "outside_temperature":
                         weather = self.agent.get_weather_for_each_hour()
-                        #self.agent.date += pd.Timedelta(hours=1)
                         response.body = str(weather)  # Já em Celsius
                         response.set_metadata("type", "outside_temperature_response")
 
@@ -63,7 +60,9 @@ class EnvironmentAgent(Agent):
 
                     elif msg.metadata["type"] == "temperature_data":
                         inside_temp = self.agent.get_indoor_temperature()
+                        self.agent.date += pd.Timedelta(hours=-1)
                         outside_temp = self.agent.get_weather_for_each_hour()  # Já em Celsius
+                        self.agent.date += pd.Timedelta(hours=1)
                         response.body = f"{inside_temp},{outside_temp}"
                         response.set_metadata("type", "temperature_data")
 
@@ -85,6 +84,7 @@ class EnvironmentAgent(Agent):
     def __init__(self, jid, password, date, city, num_divisions, desired_temperature):
         super().__init__(jid, password)
         self.date = pd.to_datetime(date)  # Simulation date
+        print(f"{date}abc")
         self.city = city
         self.num_divisions = num_divisions
         self.desired_temperature = desired_temperature
