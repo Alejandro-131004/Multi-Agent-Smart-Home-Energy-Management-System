@@ -3,6 +3,9 @@ from spade.behaviour import CyclicBehaviour
 from spade.message import Message
 import asyncio
 
+
+
+
 class HeaterAgent(Agent):
     def __init__(self, jid, password,desired_temperature):
         super().__init__(jid, password)
@@ -35,15 +38,15 @@ class HeaterAgent(Agent):
             # Calculate dissatisfaction level
             if current_room_temp < desired_temp_range[0]:
                 dissatisfaction = (desired_temp_range[0] - current_room_temp)
-            elif current_room_temp > desired_temp_range[1]:
-                dissatisfaction = (current_room_temp - desired_temp_range[1])
+        
             else:
                 dissatisfaction = 0  # Within range, no dissatisfaction
 
             # Calculate priority based on dissatisfaction
             dynamic_priority = self.calculate_priority(dissatisfaction)
-
             print(f"[Heater] Dissatisfaction level: {dissatisfaction}°C. Dynamic priority: {dynamic_priority}.")
+
+            
             while True:
                 msg = await self.receive(timeout=10)  # Aguarde uma mensagem por até 10 segundos
                 if msg and msg.get_metadata("type") == "solar_auction_started":
@@ -85,18 +88,44 @@ class HeaterAgent(Agent):
                             response = await self.receive(timeout=10)
                             print("[Heater] Received message from system.")
 
+                            
                             if response and response.get_metadata("type") == "energy_availablility":
                                 # Extract solar energy, battery status, and energy price from the message body
                                 solar_energy_available, battery_status, energy_price = map(float, response.body.split(","))
-                                print(f"[Heater] Solar energy available: {solar_energy_available} kWh.")
 
+                                max_grid_energy = self.calculate_max_grid_energy(price_actual=energy_price, 
+                                                              dynamic_priority=dynamic_priority)
+            
+                                print ({max_grid_energy},"max grid energy")
+                                print(f"[Heater] Solar energy available: {solar_energy_available} kWh.")
+                                # Use solar energy first
                                 if solar_energy_available > 0:
-                                    energy_power = min(solar_energy_available, energy_needed)
-                                    print(f"[Heater] Using {energy_power} kWh of solar energy.")
-                                    break  # Exit the loop once a valid match is found
-                                else:
-                                    print("[Heater] No solar energy available.")
-                                    energy_power = 0
+                                    solar_used = min(solar_energy_available, energy_needed)
+                                    energy_power = solar_used
+                
+                                    print(f"[Heater] Using {solar_used} kWh of solar energy.")
+                                    energy_needed -= solar_used  # Reduz a necessidade restante
+
+                                # Use battery energy next
+                                if energy_needed > 0 and battery_status > 0:
+                                    battery_used = min(battery_status, energy_needed)
+                                    energy_power += battery_used
+                                    print(f"[Heater] Using {battery_used} kWh of battery energy.")
+                                    energy_needed -= battery_used
+
+                                # Use grid energy as a last resort
+                                if energy_needed > 0 and max_grid_energy > 0:
+                                    grid_used = min(energy_needed, max_grid_energy)  # nao ultrapassa o limite
+                                    energy_power += grid_used
+                                    print(f"[Heater] Using {grid_used:.2f} kWh of grid energy at cost {grid_used * energy_price:.2f}.")
+
+
+                                if energy_needed <= 0:
+                                    print("[Heater] Energy need satisfied.")
+                                    break  # Exit the loop when energy need is met
+
+                                if energy_needed > max_grid_energy:
+                                    print(f"[Heater] Unable to fully satisfy energy need with grid. {energy_needed - max_grid_energy:.2f} kWh left unmet.")
                                     break
                         except asyncio.TimeoutError:
                             print("[Heater] Timeout while waiting for SystemState agent response. Retrying...")
@@ -127,8 +156,37 @@ class HeaterAgent(Agent):
 
         def calculate_priority(self, dissatisfaction):
             """Calculates dynamic priority based on dissatisfaction and base priority."""
-            return self.agent.base_priority + dissatisfaction  # Example of priority calculation
+            return self.agent.base_priority + dissatisfaction  # Efmaxample of priority calculation
 
         def calculate_energy_consumption(self, dissatisfaction):
             """Calculates energy consumption (kWh) based on dissatisfaction level."""
             return dissatisfaction  # Example: 1 kWh per degree of dissatisfaction
+        
+        def calculate_max_grid_energy(self,price_actual, dynamic_priority, max_possible_energy=100):
+            """
+            Calcula a energia máxima utilizável da rede com base no preço atual da energia e na prioridade dinâmica.
+            
+            Args:
+                price_actual (float): O preço atual da energia em €/MWh.
+                dynamic_priority (float): Prioridade dinâmica para o uso de energia.
+                max_possible_energy (float): Limite máximo de energia utilizável (default = 100 kWh).
+                
+            Returns:
+                float: Quantidade máxima de energia (kWh) que pode ser utilizada da rede.
+            """
+            # Definir limites com base nos quartis
+            low_price_threshold = 49.35  # 1º quartil
+            high_price_threshold = 68.01  # 3º quartil
+
+            if price_actual < low_price_threshold:
+                # Preço baixo: permitir uso total
+                max_energy = max_possible_energy
+            elif price_actual <= high_price_threshold:
+                # Preço médio: uso proporcional à prioridade
+                max_energy = max_possible_energy * (dynamic_priority / 10)  # Exemplo de escala de prioridade
+            else:
+                # Preço alto: limitar uso com base na prioridade
+                max_energy = max_possible_energy * (dynamic_priority / 20)  # Reduzido devido ao preço alto
+
+            # Garantir que a energia máxima não ultrapasse o limite máximo
+            return min(max_possible_energy, max(0, max_energy))
