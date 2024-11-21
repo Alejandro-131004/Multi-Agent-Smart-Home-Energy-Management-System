@@ -10,9 +10,31 @@ class AirconAgent(Agent):
         self.base_priority = 1.0  # Base priority of the Aircon
         self.desired_temperature=desired_temperature
         self.response_sent = False
-
+        self.run = 0
     class AirconBehaviour(CyclicBehaviour):
         async def run(self):
+            if(self.agent.run == 2):
+                while True:
+                    msg = await self.receive(timeout=10)  # Aguarda até 10 segundos
+                    if msg:
+                        msg_type = msg.get_metadata("type")  # Obtém o tipo da mensagem
+                        if msg_type == "preference_update":
+                            # Processar atualização de preferências
+                            self.agent.desired_temperature = msg.body
+                            print(f"[{self.agent.__class__.__name__}] Preferência atualizada recebida: Temperatura desejada = {self.agent.desired_temperature}.")
+                            # Aqui você pode adicionar a lógica para ajustar o estado do agente, se necessário.
+                            break  # Sai do loop após processar a atualização
+                        elif msg_type == "no_changes":
+                            # Nenhuma alteração na preferência
+                            print(f"[{self.agent.__class__.__name__}] Mensagem recebida: Nenhuma mudança nas preferências.")
+                            break  # Sai do loop após processar a mensagem
+                        else:
+                            # Tipo de mensagem não reconhecido
+                            print(f"[{self.agent.__class__.__name__}] Mensagem ignorada. Tipo desconhecido: {msg_type}.")
+                            # Sai do loop após processar a mensagem desconhecida
+                    else:
+                        print(f"[{self.agent.__class__.__name__}] Nenhuma mensagem recebida dentro do tempo limite.")
+                        break  # Sai do loop caso o tempo limite seja atingido
             energy_power = 0
             env_agent_id = "environment@localhost"
             msg = Message(to=env_agent_id)
@@ -168,24 +190,8 @@ class AirconAgent(Agent):
                 else:
                     print(f"[{self.agent.__class__.__name__}] No message received within the timeout.")
                     break
-
-            msg = await self.receive(timeout=10)  # Aguarda até 10 segundos
-            if msg:
-                msg_type = msg.get_metadata("type")  # Obtém o tipo da mensagem
-                if msg_type == "preference_update":
-                    # Processar atualização de preferências
-                    self.agent.desired_temperature = msg.body
-                    print(f"[{self.agent.__class__.__name__}] Preferência atualizada recebida: Temperatura desejada = {desired_temperature}.")
-                    # Aqui você pode adicionar a lógica para ajustar o estado do agente, se necessário.
-                elif msg_type == "no_changes":
-                    # Nenhuma alteração na preferência
-                    print(f"[{self.agent.__class__.__name__}] Mensagem recebida: Nenhuma mudança nas preferências.")
-                else:
-                    # Tipo de mensagem não reconhecido
-                    print(f"[{self.agent.__class__.__name__}] Mensagem ignorada. Tipo desconhecido: {msg_type}.")
-            else:
-                print(f"[{self.agent.__class__.__name__}] Nenhuma mensagem recebida dentro do tempo limite.")
-
+                break
+            self.agent.run = 2
             await asyncio.sleep(0.1)  # Wait before the next iteration
 
         def calculate_priority(self, dissatisfaction):

@@ -7,7 +7,7 @@ class HeaterAgent(Agent):
     def __init__(self, jid, password,desired_temperature):
         super().__init__(jid, password)
         self.desired_temperature =  desired_temperature 
-        
+        self.run = 0
         self.heating_power_per_degree = 1.0  # Example: 1 kW per degree of heating
         self.base_priority = 1.0  # Base priority of the heater
 
@@ -20,6 +20,29 @@ class HeaterAgent(Agent):
 
         async def run(self):
             energy_power = 0
+            degrees_heated = 0
+            if(self.agent.run == 2):
+                while True:
+                    msg = await self.receive(timeout=10)  # Aguarda até 10 segundos
+                    if msg:
+                        msg_type = msg.get_metadata("type")  # Obtém o tipo da mensagem
+                        if msg_type == "preference_update":
+                            # Processar atualização de preferências
+                            self.agent.desired_temperature = msg.body
+                            print(f"[{self.agent.__class__.__name__}] Preferência atualizada recebida: Temperatura desejada = {self.agent.desired_temperature}.")
+                            # Aqui você pode adicionar a lógica para ajustar o estado do agente, se necessário.
+                            break  # Sai do loop após processar a atualização
+                        elif msg_type == "no_changes":
+                            # Nenhuma alteração na preferência
+                            print(f"[{self.agent.__class__.__name__}] Mensagem recebida: Nenhuma mudança nas preferências.")
+                            break  # Sai do loop após processar a mensagem
+                        else:
+                            # Tipo de mensagem não reconhecido
+                            print(f"[{self.agent.__class__.__name__}] Mensagem ignorada. Tipo desconhecido: {msg_type}.")
+                            # Sai do loop após processar a mensagem desconhecida
+                    else:
+                        print(f"[{self.agent.__class__.__name__}] Nenhuma mensagem recebida dentro do tempo limite.")
+                        break  # Sai do loop caso o tempo limite seja atingido
             env_agent_id = "environment@localhost"
             msg = Message(to=env_agent_id)
             msg.set_metadata("performative", "request")
@@ -153,41 +176,8 @@ class HeaterAgent(Agent):
                     msg.set_metadata("type", "room_temperature_update_heat")  # Must match the receiver's check
                     msg.body = str(degrees_heated)
                     await self.send(msg)
-                    msg = await self.receive(timeout=10)  # Wait for a message for up to 10 seconds
-                    if msg:
-                        msg_type = msg.get_metadata("type")
-                        if msg_type == "state_request":
-                            # Handle state request and reply with the status
-                            response = Message(to="system@localhost")
-                            response.set_metadata("performative", "inform")
-                            response.set_metadata("type", "state_response")
-                            if energy_power > 0:
-                                response.body = "on"
-                            else:
-                                response.body = "off"
-                            await self.send(response)
-                            print(f"[{self.agent.__class__.__name__}] Sent state response:  to {msg.sender}.")
-                        else:
-                            print(f"[{self.agent.__class__.__name__}] Ignored message with metadata type: {msg_type}.")
-                    else:
-                        print(f"[{self.agent.__class__.__name__}] No message received within the timeout.")
 
-                    msg = await self.receive(timeout=10)  # Aguarda até 10 segundos
-                    if msg:
-                        msg_type = msg.get_metadata("type")  # Obtém o tipo da mensagem
-                        if msg_type == "preference_update":
-                            # Processar atualização de preferências
-                            self.agent.desired_temperature = msg.body
-                            print(f"[{self.agent.__class__.__name__}] Preferência atualizada recebida: Temperatura desejada = {desired_temperature}.")
-                            # Aqui você pode adicionar a lógica para ajustar o estado do agente, se necessário.
-                        elif msg_type == "no_changes":
-                            # Nenhuma alteração na preferência
-                            print(f"[{self.agent.__class__.__name__}] Mensagem recebida: Nenhuma mudança nas preferências.")
-                        else:
-                            # Tipo de mensagem não reconhecido
-                            print(f"[{self.agent.__class__.__name__}] Mensagem ignorada. Tipo desconhecido: {msg_type}.")
-                    else:
-                        print(f"[{self.agent.__class__.__name__}] Nenhuma mensagem recebida dentro do tempo limite.")
+                    
 
                     
                 else:
@@ -219,8 +209,8 @@ class HeaterAgent(Agent):
                 else:
                     print("[Heater] No message received within the timeout.")
                     break
-
-                      
+            self.agent.run = 2
+                            
         def calculate_priority(self, dissatisfaction):
             """Calculates dynamic priority based on dissatisfaction and base priority."""
             return self.agent.base_priority + dissatisfaction  # Efmaxample of priority calculation

@@ -7,9 +7,26 @@ class WindowAgent(Agent):
     def __init__(self, jid, password, desired_temperature):
         super().__init__(jid, password)
         self.desired_temperature = desired_temperature
-
+        self.run = 0
     class WindowBehaviour(CyclicBehaviour):
         async def run(self):
+            if(self.agent.run == 2):
+                msg = await self.receive(timeout=10)  # Aguarda até 10 segundos
+                if msg:
+                    msg_type = msg.get_metadata("type")  # Obtém o tipo da mensagem
+                    if msg_type == "preference_update":
+                        # Processar atualização de preferências
+                        self.agent.desired_temperature = float(msg.body)
+                        print(f"[Windows] Preferência atualizada recebida: Temperatura desejada = {self.agent.desired_temperature}.")
+                        # Aqui você pode adicionar a lógica para ajustar o estado do agente, se necessário.
+                    elif msg_type == "no_changes":
+                        # Nenhuma alteração na preferência
+                        print(f"[Windows] Mensagem recebida: Nenhuma mudança nas preferências.")
+                    else:
+                        # Tipo de mensagem não reconhecido
+                        print(f"[Windows] Mensagem ignorada. Tipo desconhecido: {msg_type}.")
+                else:
+                    print("[Windows] Nenhuma mensagem recebida dentro do tempo limite.")
             while True:
                 msg = await self.receive(timeout=10)  # Aguarde uma mensagem por até 10 segundos
                 if msg and msg.get_metadata("type") == "solar_auction_started":
@@ -84,7 +101,7 @@ class WindowAgent(Agent):
                 if msg_type == "preference_update":
                     # Processar atualização de preferências
                     self.agent.desired_temperature = float(msg.body)
-                    print(f"[Windows] Preferência atualizada recebida: Temperatura desejada = {desired_temperature}.")
+                    print(f"[Windows] Preferência atualizada recebida: Temperatura desejada = {self.agent.desired_temperature}.")
                     # Aqui você pode adicionar a lógica para ajustar o estado do agente, se necessário.
                 elif msg_type == "no_changes":
                     # Nenhuma alteração na preferência
@@ -94,7 +111,8 @@ class WindowAgent(Agent):
                     print(f"[Windows] Mensagem ignorada. Tipo desconhecido: {msg_type}.")
             else:
                 print("[Windows] Nenhuma mensagem recebida dentro do tempo limite.")
-
+            self.agent.run = 2
+            
                      
     async def setup(self):
         print("[WindowAgent] Agent starting...")
