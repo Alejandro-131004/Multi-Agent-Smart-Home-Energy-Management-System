@@ -29,7 +29,8 @@ class EnvironmentAgent(Agent):
                         print(self.agent.date)
                         response.body = str(price)
                         response.set_metadata("type", "energy_price")
-
+                    elif msg.metadata["type"] == "preference_update":
+                        self.agent.desired_temperature = float(msg.body)
                     elif msg.metadata["type"] == "outside_temperature":
                         weather = self.agent.get_weather_for_each_hour()
                         #self.agent.date += pd.Timedelta(hours=1)
@@ -78,7 +79,7 @@ class EnvironmentAgent(Agent):
                     response.set_metadata("type", "error_response")
 
                 # Send the response message
-                if response.metadata["type"] != "room_temperature_response_heat" and response.metadata["type"] != "room_temperature_response_cold" and response.metadata["type"] != "room_temperature_response_windows":
+                if msg.metadata['type']!= "preference_update" and response.metadata["type"] != "room_temperature_response_heat" and response.metadata["type"] != "room_temperature_response_cold" and response.metadata["type"] != "room_temperature_response_windows":
                     await self.send(response)
                     #print(f"[{self.agent.date}] Sent response: {response.body}")
 

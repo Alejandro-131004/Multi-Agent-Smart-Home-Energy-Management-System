@@ -13,6 +13,7 @@ class AirconAgent(Agent):
 
     class AirconBehaviour(CyclicBehaviour):
         async def run(self):
+            energy_power = 0
             env_agent_id = "environment@localhost"
             msg = Message(to=env_agent_id)
             msg.set_metadata("performative", "request")
@@ -76,37 +77,60 @@ class AirconAgent(Agent):
                     await self.send(energy_request_msg)
 
                     while True:
-                        try: 
-                            # Recebe a mensagem com informações sobre energia disponível
-                            energy_response = await self.receive(timeout=10)
-                            print("[Aircon] Received message from system")
+                         
+                        # Recebe a mensagem com informações sobre energia disponível
+                        energy_response = await self.receive(timeout=10)
+                        print("[Aircon] Received message from system. {response.get_metadata('type')}")
 
-                            if energy_response and energy_response.get_metadata("type") == "energy_availability":
-                                solar_energy, battery_status, energy_price = map(float, energy_response.body.split(","))
-                                print(f"[Aircon] Solar energy available: {solar_energy} kWh.")
+                        if energy_response and energy_response.get_metadata("type") == "energy_availability":
+                            solar_energy_available, battery_status, energy_price = map(float, energy_response.body.split(","))
+                            print(f"[Aircon] Solar energy available: {solar_energy_available} kWh.")
 
-                                # Caso haja energia solar disponível
-                                if solar_energy > 0:
-                                    energy_power = min(solar_energy, energy_needed)
-                                    print(f"[Aircon] Using {energy_power} kWh of solar energy.")
-                                    degrees_cooled = energy_power / self.agent.cooling_power_per_degree
-                                    break
-                                else:
-                                    # Caso não haja energia solar
-                                    print("[Aircon] No solar energy available.")
-                                    energy_power=0
-                                    break
-                            else:
-                                print ("nao entrei no if...")
-                        except asyncio.TimeoutError:
-                                print("[Aircon] Timeout while waiting for SystemState agent response. Retrying...")
+                            max_grid_energy = self.calculate_max_grid_energy(price_actual=energy_price, dynamic_priority=dynamic_priority)
+                            
+                            print ({max_grid_energy},"max grid energy")
+                            print(f"[Heater] Solar energy available: {solar_energy_available} kWh.")
+                            solar_used = 0
+                            battery_used = 0
+                            grid_used = 0
+                            energy_power = 0
+                            # Use solar energy first
+                            if solar_energy_available > 0:
+                                solar_used = min(solar_energy_available, energy_needed)
+                                energy_power = solar_used
+            
+                                print(f"[Aircon] Using {solar_used} kWh of solar energy.")
+                                energy_needed -= solar_used  # Reduz a necessidade restante
+
+                            # Use battery energy next
+                            if energy_needed > 0 and battery_status > 0:
+                                battery_used = min(battery_status, energy_needed)
+                                energy_power += battery_used
+                                print(f"[Aircon] Using {battery_used} kWh of battery energy.")
+                                energy_needed -= battery_used
+
+                            # Use grid energy as a last resort
+                            if energy_needed > 0 and max_grid_energy > 0:
+                                grid_used = min(energy_needed, max_grid_energy)  # nao ultrapassa o limite
+                                energy_power += grid_used
+                                print(f"[Aircon] Using {grid_used:.2f} kWh of grid energy at cost {grid_used * energy_price:.2f}.")
+
+
+                            if energy_needed <= 0:
+                                print("[Aircon] Energy need satisfied.")
+                                break  # Exit the loop when energy need is met
+
+                            if energy_needed > max_grid_energy:
+                                print(f"[Aircon] Unable to fully satisfy energy need with grid. {energy_needed - max_grid_energy:.2f} kWh left unmet.")
+                                break
+                        break
 
                     # Update the heating based on available energy
                     if energy_power > 0:
                         degrees_cooled = energy_power / self.agent.cooling_power_per_degree
                         msg = Message(to=env_agent_id)
                         msg.set_metadata("performative", "request")
-                        msg.set_metadata("type", "room_temperature_update_cold")  # Deve coincidir com a verificação do receiver
+                        msg.set_metadata("type", "room_temperature_update_cold")  
                         msg.body = str(degrees_cooled)
                         await self.send(msg)
                         print(f"[Aircon] Sent room temperature update: {degrees_cooled}°C.")
@@ -114,7 +138,7 @@ class AirconAgent(Agent):
                         system_msg = Message(to="system@localhost")
                         system_msg.set_metadata("performative", "inform")
                         system_msg.set_metadata("type", "confirmation")
-                        system_msg.body = f"{energy_power},{0},{0}"  # Inclui custo calculado
+                        system_msg.body = f"{solar_used},{battery_used},{grid_used}" 
                         await self.send(system_msg)
                         print(f"[Aircon] Room temperature decreased by {degrees_cooled}°C")
                     else:
@@ -123,6 +147,44 @@ class AirconAgent(Agent):
                      print("[Aircon] window open")
             else:
                 print("[Aircon] Comfortable temperature, no cooling needed.")
+            while True:
+                msg = await self.receive(timeout=10)  # Wait for a message for up to 10 seconds
+                if msg:
+                    msg_type = msg.get_metadata("type")
+                    if msg_type == "state_request":
+                        # Handle state request and reply with the status
+                        response = Message(to="system@localhost")
+                        response.set_metadata("performative", "inform")
+                        response.set_metadata("type", "state_response")
+                        if energy_power > 0:
+                            response.body = "on"
+                        else:
+                            response.body = "off"
+                        await self.send(response)
+                        print(f"[{self.agent.__class__.__name__}] Sent state response: {response.body} to {msg.sender}.")
+                        break
+                    else:
+                        print(f"[{self.agent.__class__.__name__}] Ignored message with metadata type: {msg_type}.")
+                else:
+                    print(f"[{self.agent.__class__.__name__}] No message received within the timeout.")
+                    break
+
+            msg = await self.receive(timeout=10)  # Aguarda até 10 segundos
+            if msg:
+                msg_type = msg.get_metadata("type")  # Obtém o tipo da mensagem
+                if msg_type == "preference_update":
+                    # Processar atualização de preferências
+                    self.agent.desired_temperature = msg.body
+                    print(f"[{self.agent.__class__.__name__}] Preferência atualizada recebida: Temperatura desejada = {desired_temperature}.")
+                    # Aqui você pode adicionar a lógica para ajustar o estado do agente, se necessário.
+                elif msg_type == "no_changes":
+                    # Nenhuma alteração na preferência
+                    print(f"[{self.agent.__class__.__name__}] Mensagem recebida: Nenhuma mudança nas preferências.")
+                else:
+                    # Tipo de mensagem não reconhecido
+                    print(f"[{self.agent.__class__.__name__}] Mensagem ignorada. Tipo desconhecido: {msg_type}.")
+            else:
+                print(f"[{self.agent.__class__.__name__}] Nenhuma mensagem recebida dentro do tempo limite.")
 
             await asyncio.sleep(0.1)  # Wait before the next iteration
 

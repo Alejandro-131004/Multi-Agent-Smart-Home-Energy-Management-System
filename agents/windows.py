@@ -72,10 +72,28 @@ class WindowAgent(Agent):
                         response.set_metadata("type", "state_response")
                         response.body = window_status  # Assume window_status is defined elsewhere
                         await self.send(response)
+                        break
                     else:
                         print(f"[Window] Ignored message with metadata type: {msg_type}.")
                 else:
                     print("[Window] No message received within the timeout.")
+                    break
+            msg = await self.receive(timeout=10)  # Aguarda até 10 segundos
+            if msg:
+                msg_type = msg.get_metadata("type")  # Obtém o tipo da mensagem
+                if msg_type == "preference_update":
+                    # Processar atualização de preferências
+                    self.agent.desired_temperature = float(msg.body)
+                    print(f"[Windows] Preferência atualizada recebida: Temperatura desejada = {desired_temperature}.")
+                    # Aqui você pode adicionar a lógica para ajustar o estado do agente, se necessário.
+                elif msg_type == "no_changes":
+                    # Nenhuma alteração na preferência
+                    print(f"[Windows] Mensagem recebida: Nenhuma mudança nas preferências.")
+                else:
+                    # Tipo de mensagem não reconhecido
+                    print(f"[Windows] Mensagem ignorada. Tipo desconhecido: {msg_type}.")
+            else:
+                print("[Windows] Nenhuma mensagem recebida dentro do tempo limite.")
 
                      
     async def setup(self):

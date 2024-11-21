@@ -19,6 +19,7 @@ class HeaterAgent(Agent):
             self.window_open = False
 
         async def run(self):
+            energy_power = 0
             env_agent_id = "environment@localhost"
             msg = Message(to=env_agent_id)
             msg.set_metadata("performative", "request")
@@ -135,6 +136,7 @@ class HeaterAgent(Agent):
                                 if energy_needed > max_grid_energy:
                                     print(f"[Heater] Unable to fully satisfy energy need with grid. {energy_needed - max_grid_energy:.2f} kWh left unmet.")
                                     break
+                            break
                         except asyncio.TimeoutError:
                             print("[Heater] Timeout while waiting for SystemState agent response. Retrying...")
 
@@ -151,7 +153,42 @@ class HeaterAgent(Agent):
                     msg.set_metadata("type", "room_temperature_update_heat")  # Must match the receiver's check
                     msg.body = str(degrees_heated)
                     await self.send(msg)
-                    
+                    msg = await self.receive(timeout=10)  # Wait for a message for up to 10 seconds
+                    if msg:
+                        msg_type = msg.get_metadata("type")
+                        if msg_type == "state_request":
+                            # Handle state request and reply with the status
+                            response = Message(to="system@localhost")
+                            response.set_metadata("performative", "inform")
+                            response.set_metadata("type", "state_response")
+                            if energy_power > 0:
+                                response.body = "on"
+                            else:
+                                response.body = "off"
+                            await self.send(response)
+                            print(f"[{self.agent.__class__.__name__}] Sent state response:  to {msg.sender}.")
+                        else:
+                            print(f"[{self.agent.__class__.__name__}] Ignored message with metadata type: {msg_type}.")
+                    else:
+                        print(f"[{self.agent.__class__.__name__}] No message received within the timeout.")
+
+                    msg = await self.receive(timeout=10)  # Aguarda até 10 segundos
+                    if msg:
+                        msg_type = msg.get_metadata("type")  # Obtém o tipo da mensagem
+                        if msg_type == "preference_update":
+                            # Processar atualização de preferências
+                            self.agent.desired_temperature = msg.body
+                            print(f"[{self.agent.__class__.__name__}] Preferência atualizada recebida: Temperatura desejada = {desired_temperature}.")
+                            # Aqui você pode adicionar a lógica para ajustar o estado do agente, se necessário.
+                        elif msg_type == "no_changes":
+                            # Nenhuma alteração na preferência
+                            print(f"[{self.agent.__class__.__name__}] Mensagem recebida: Nenhuma mudança nas preferências.")
+                        else:
+                            # Tipo de mensagem não reconhecido
+                            print(f"[{self.agent.__class__.__name__}] Mensagem ignorada. Tipo desconhecido: {msg_type}.")
+                    else:
+                        print(f"[{self.agent.__class__.__name__}] Nenhuma mensagem recebida dentro do tempo limite.")
+
                     
                 else:
                      print("[Heater] window open")
@@ -176,10 +213,12 @@ class HeaterAgent(Agent):
                             response.body = "off"
                             
                         await self.send(response)
+                        break
                     else:
                         print(f"[Heater] Ignored message with metadata type: {msg_type}.")
                 else:
                     print("[Heater] No message received within the timeout.")
+                    break
 
                       
         def calculate_priority(self, dissatisfaction):

@@ -87,7 +87,7 @@ class SystemState(Agent):
                         self.system_state["inside_temperature"] = inside_temp
                         self.system_state["outside_temperature"] = outside_temp
                         break
-                self.display_agent_states_gui()
+                await self.display_agent_states_gui()
                 self.agent.state = 0
                 self.agent.solar_confirm = 0
                 self.agent.battery_confirm = 0
@@ -444,13 +444,13 @@ class SystemState(Agent):
                     break
 
 
-        def display_agent_states_gui(self):
+
+
+
+        async def display_agent_states_gui(self):
             """
             Creates a GUI to display agent states and system-wide states, and allows resetting states and updating preferences.
             """
-            import tkinter as tk
-            from tkinter import ttk, messagebox
-            from datetime import datetime
 
             def reset_states():
                 """Resets 'battery_used', 'solar_used', 'cost', and 'battery_charge' fields to 'N/A'."""
@@ -463,56 +463,46 @@ class SystemState(Agent):
                 root.destroy()
 
             def update_preferences():
-                """Opens a new window to update preferences."""
+                """Abre uma janela para atualizar apenas as preferências de divisões e temperatura desejada."""
+
                 def save_preferences():
                     try:
-                        # Get input values
-                        start_date = date_entry.get() or '2015-01-01 00:00:00'
-                        city = city_entry.get() or 'Madrid'
-                        num_divisions = int(divisions_entry.get() or 5)
-                        desired_temperature = float(temp_entry.get() or 40.0)
-                        
-                        # Validate date format
-                        try:
-                            datetime.strptime(start_date, '%Y-%m-%d %H:%M:%S')
-                        except ValueError:
-                            messagebox.showerror("Error", "Invalid date format. Please use YYYY-MM-DD HH:MM:SS.")
-                            return
-                        
-                        # Log updated preferences
-                        print(f"Updated Preferences: Start Date={start_date}, City={city}, Divisions={num_divisions}, Temp={desired_temperature}")
+                        # Obter os valores de entrada ou usar os padrões
+                        num_divisions = int(divisions_entry.get() or 5)  # Default is 5
+                        desired_temperature = float(temp_entry.get() or 40.0)  # Default is 40.0
+
+                        # Enviar as mudanças para a função notify_agents_changes
+                        asyncio.create_task(self.notify_agents_changes(num_divisions=num_divisions, desired_temperature=desired_temperature))
+
+                        # Fechar a janela de preferências
                         preferences_window.destroy()
                     except ValueError as e:
-                        messagebox.showerror("Error", f"Invalid input: {e}")
+                        messagebox.showerror("Error", f"Entrada inválida: {e}")
 
+                # Criar uma nova janela para preferências
                 preferences_window = tk.Toplevel(root)
                 preferences_window.title("Update Preferences")
 
-                tk.Label(preferences_window, text="Start Date (YYYY-MM-DD HH:MM:SS):").grid(row=0, column=0, padx=10, pady=5, sticky="e")
-                date_entry = tk.Entry(preferences_window, width=25)
-                date_entry.grid(row=0, column=1, padx=10, pady=5)
-
-                tk.Label(preferences_window, text="City:").grid(row=1, column=0, padx=10, pady=5, sticky="e")
-                city_entry = tk.Entry(preferences_window, width=25)
-                city_entry.grid(row=1, column=1, padx=10, pady=5)
-
-                tk.Label(preferences_window, text="Number of Divisions:").grid(row=2, column=0, padx=10, pady=5, sticky="e")
+                # Entrada para o número de divisões
+                tk.Label(preferences_window, text="Number of Divisions:").grid(row=0, column=0, padx=10, pady=5, sticky="e")
                 divisions_entry = tk.Entry(preferences_window, width=25)
-                divisions_entry.grid(row=2, column=1, padx=10, pady=5)
+                divisions_entry.grid(row=0, column=1, padx=10, pady=5)
 
-                tk.Label(preferences_window, text="Desired Temperature:").grid(row=3, column=0, padx=10, pady=5, sticky="e")
+                # Entrada para a temperatura desejada
+                tk.Label(preferences_window, text="Desired Temperature:").grid(row=1, column=0, padx=10, pady=5, sticky="e")
                 temp_entry = tk.Entry(preferences_window, width=25)
-                temp_entry.grid(row=3, column=1, padx=10, pady=5)
+                temp_entry.grid(row=1, column=1, padx=10, pady=5)
 
+                # Botão para salvar as alterações
                 save_button = tk.Button(preferences_window, text="Save Preferences", command=save_preferences)
-                save_button.grid(row=4, column=0, columnspan=2, pady=10)
+                save_button.grid(row=2, column=0, columnspan=2, pady=10)
 
             root = tk.Tk()
             root.title("Agent States and System State")
 
             # Create Treeview with system state
             tree = ttk.Treeview(root, columns=("Agent", "State", "Battery Used", "Solar Used", "Cost", 
-                                            "Inside Temp", "Outside Temp", "Energy Price", "Solar Production", "Battery Charge"), 
+                                                "Inside Temp", "Outside Temp", "Energy Price", "Solar Production", "Battery Charge"), 
                                 show="headings")
             tree.heading("Agent", text="Agent")
             tree.heading("State", text="State")
@@ -549,4 +539,39 @@ class SystemState(Agent):
             tk.Button(root, text="Update Preferences", command=update_preferences).pack(pady=5)
 
             root.mainloop()
+
+        async def notify_agents_changes(self, num_divisions, desired_temperature):
+            """Função que processa as mudanças nas preferências e notifica os agentes."""
+            
+            # Verifica se a temperatura desejada foi alterada
+            if desired_temperature == self.system_state.get("desired_temperature", None):
+                # Caso não haja alterações
+                print(f"Nenhuma mudança detectada na temperatura desejada. Notificando agentes com 'no_changes'.")
+                msg_metadata = "no_changes"
+                msg_body = "No changes to desired temperature."
+            else:
+                # Caso a temperatura seja alterada
+                print(f"Temperatura desejada alterada para {desired_temperature}. Notificando agentes.")
+                msg_metadata = "preference_update"
+                msg_body = f"{desired_temperature}"
+
+                # Atualiza o estado do sistema com a nova temperatura
+                self.system_state["desired_temperature"] = desired_temperature
+
+            # Lista de agentes a serem notificados
+            agents = ["heater@localhost", "windows@localhost", "aircon@localhost", "environment@localhost"]
+
+            for agent in agents:
+                # Criar a mensagem
+                msg = Message(to=agent)
+                msg.set_metadata("performative", "inform")
+                msg.set_metadata("type", msg_metadata)
+                msg.body = msg_body
+
+                # Enviar a mensagem (método assíncrono)
+                try:
+                    await self.send(msg)
+                    print(f"Mensagem enviada para {agent}: {msg.body}")
+                except Exception as e:
+                    print(f"Erro ao enviar mensagem para {agent}: {e}")
 

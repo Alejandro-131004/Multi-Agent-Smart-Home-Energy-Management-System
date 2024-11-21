@@ -22,6 +22,7 @@ class WashingMachineAgent(Agent):
 
         async def run(self):
             energy_price = None
+            energy_power = 0
             solar_energy_available = 0  # Valor inicial de energia solar disponível
             battery_status = 0  # Valor inicial de status da bateria
             # Solicite o preço da energia atual ao SystemState
@@ -36,6 +37,8 @@ class WashingMachineAgent(Agent):
 
             # Adicionar roupas por hora
             self.add_clothes()
+
+            self.priority = self.calculate_dynamic_priority()
 
             # Se a caixa está cheia, preparar para lavar
             if (self.clothes_count >= self.box_capacity*0.8) or (self.cycle_hour == 1):
@@ -56,6 +59,42 @@ class WashingMachineAgent(Agent):
                         try:
                             solar_energy_available, battery_status, energy_price = map(float, response.body.split(","))
                             print(f"[Washing Machine] Energy conditions received: Solar={solar_energy_available} kWh, Battery={battery_status} kWh, Price={energy_price} €/kWh")
+                            max_grid_energy = self.calculate_max_grid_energy(price_actual=energy_price, dynamic_priority=self.priority)
+                            print ({max_grid_energy},"max grid energy de washing machine")
+                            solar_used = 0
+                            battery_used = 0
+                            grid_used = 0
+                            energy_power = 0
+                            energy_needed=self.energy_per_cycle
+                            # Use solar energy first
+                            if solar_energy_available > 0:
+                                solar_used = min(solar_energy_available, energy_needed)
+                                energy_power = solar_used
+            
+                                print(f"[Washing Machine] Using {solar_used} kWh of solar energy.")
+                                energy_needed -= solar_used  # Reduz a necessidade restante
+
+                            # Use battery energy next
+                            if energy_needed > 0 and battery_status > 0:
+                                battery_used = min(battery_status, energy_needed)
+                                energy_power += battery_used
+                                print(f"[Washing Machine] Using {battery_used} kWh of battery energy.")
+                                energy_needed -= battery_used
+
+                            # Use grid energy as a last resort
+                            if energy_needed > 0 and max_grid_energy > 0:
+                                grid_used = min(energy_needed, max_grid_energy)  # nao ultrapassa o limite
+                                energy_power += grid_used
+                                print(f"[Washing Machine] Using {grid_used:.2f} kWh of grid energy at cost {grid_used * energy_price:.2f}.")
+
+
+                            if energy_needed <= 0:
+                                print("[Washing Machineter] Energy need satisfied.")
+                                break  # Exit the loop when energy need is met
+
+                            if energy_needed > max_grid_energy:
+                                print(f"[Washing Machine] Unable to fully satisfy energy need with grid. {energy_needed - max_grid_energy:.2f} kWh left unmet.")
+                                break
                             break
                         except ValueError:
                             print("[Washing Machine] Received invalid energy data.")
@@ -64,12 +103,8 @@ class WashingMachineAgent(Agent):
                         return
 
                 if energy_price is not None:
-                    # Calcular o consumo de energia
-                    solar_used, battery_used, cost = self.calculate_consumption(
-                        self.energy_per_cycle, solar_energy_available, battery_status, energy_price
-                    )
-                    print(
-                        f"[Washing Machine] Washing started. Solar: {solar_used} kWh, Battery: {battery_used} kWh, Cost: {cost} €")
+                    
+                    print(f"[Washing Machine] Washing started. Solar: {solar_used} kWh, Battery: {battery_used} kWh, Grid: {grid_used}")
 
                     if self.cycle_hour == 1:
                         # Resetar o número de roupas após lavar
@@ -79,7 +114,7 @@ class WashingMachineAgent(Agent):
                     confirmation_msg = Message(to="system@localhost")
                     confirmation_msg.set_metadata("performative", "inform")
                     confirmation_msg.set_metadata("type", "confirmation")
-                    confirmation_msg.body = f"{solar_used},{battery_used},{cost}"
+                    confirmation_msg.body = f"{solar_used},{battery_used},{grid_used * energy_price:.2f}"
                     await self.send(confirmation_msg)
                 else:
                     print("[Washing Machine] Energy price unavailable. Cannot start washing.")
@@ -89,6 +124,25 @@ class WashingMachineAgent(Agent):
                 print(f"[Washing Machine] Waiting for more clothes. Current count: {self.clothes_count}/{self.box_capacity}")
             else:
                 print(f"[Washing Machine] Waiting for more clothes. Current count: {self.clothes_count}/{self.box_capacity}")
+            
+            msg = await self.receive(timeout=10)  # Wait for a message for up to 10 seconds
+            if msg:
+                msg_type = msg.get_metadata("type")
+                if msg_type == "state_request":
+                    # Handle state request and reply with the washing machine status
+                    response = Message(to="system@localhost")
+                    response.set_metadata("performative", "inform")
+                    response.set_metadata("type", "state_response")
+                    if energy_power > 0:
+                        response.body = "on"
+                    else:
+                        response.body = "off"
+                    await self.send(response)
+                    print(f"[Washing Machine] Sent state response:  to {msg.sender}.")
+                else:
+                    print(f"[Washing Machine] Ignored message with metadata type: {msg_type}.")
+            else:
+                print("[Washing Machine] No message received within the timeout.")
 
             # Simular espera de uma hora antes do próximo ciclo
             await asyncio.sleep(1)
@@ -102,7 +156,7 @@ class WashingMachineAgent(Agent):
             else:
                 self.clothes_count = 0
                 print(f"[Washing Machine] The box is now empty, you can put on some clothes. Total: {self.clothes_count}/{self.box_capacity}")
-
+        '''
         def calculate_consumption(self, consumption_amount, solar_energy_available, battery_status, energy_price):
             """Calcula a energia consumida durante o ciclo."""
             solar_used = 0
@@ -129,4 +183,42 @@ class WashingMachineAgent(Agent):
                     cost = remaining_energy * energy_price
 
             return solar_used, battery_used, cost
+            '''
+
+        def calculate_dynamic_priority(self):
+            """Calcula a prioridade dinâmica com base na ocupação do cesto."""
+            fill_percentage = self.clothes_count / self.box_capacity  # Percentagem do cesto cheio
+
+            if fill_percentage <= 0.5:
+                # Abaixo de 50% não é permitido iniciar a lavagem
+                return 0
+            elif fill_percentage < 0.8:
+                # Entre 50% e 80%, a prioridade aumenta gradualmente
+                return self.priority + (fill_percentage - 0.5) * 20  # Ajusta com base na ocupação
+            elif fill_percentage < 1.0:
+                # Entre 80% e 100%, a prioridade aumenta significativamente
+                return self.priority + 10 + (fill_percentage - 0.8) * 50
+            else:
+                # Cesto 100% cheio retorna uma prioridade muito alta
+                return 1000
+            
+        def calculate_max_grid_energy(self,price_actual, dynamic_priority, max_possible_energy=3):
+        
+            # Definir limites com base nos quartis
+            low_price_threshold = 49.35  # 1º quartil
+            high_price_threshold = 68.01  # 3º quartil
+
+            if price_actual < low_price_threshold:
+                # Preço baixo: permitir uso total
+                max_energy = max_possible_energy
+            elif price_actual <= high_price_threshold:
+                # Preço médio: uso proporcional à prioridade
+                max_energy = max_possible_energy * (dynamic_priority / 10)  # Exemplo de escala de prioridade
+            else:
+                # Preço alto: limitar uso com base na prioridade
+                max_energy = max_possible_energy * (dynamic_priority / 20)  # Reduzido devido ao preço alto
+
+            # Garantir que a energia máxima não ultrapasse o limite máximo
+            return min(max_possible_energy, max(0, max_energy))
+
 
