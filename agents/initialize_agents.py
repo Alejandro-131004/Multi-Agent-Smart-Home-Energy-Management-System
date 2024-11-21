@@ -42,8 +42,9 @@ async def start_agents(date, city, num_divisions, desired_temperature):
     solar_agent = SolarPanelAgent("solar@localhost", "password")
     washing_agent = WashingMachineAgent("washing@localhost", "password")
     windows_agent = WindowAgent("windows@localhost", "password", desired_temperature)
+    charger_ev_agent = CarChargerAgent("chargerEV@localhost", "password")
     aircon_agent = AirconAgent("aircon@localhost", "password", desired_temperature)
-    system_state = SystemState("system@localhost", "password", [ "heater@localhost", "fridge@localhost", "washing@localhost", "windows@localhost", "aircon@localhost"])
+    system_state = SystemState("system@localhost", "password", [ "heater@localhost", "fridge@localhost", "washing@localhost", "windows@localhost", "aircon@localhost", "chargerEV@localhost"])
 
     print("[DEBUG] All agents have been initialized.")
 
@@ -53,6 +54,7 @@ async def start_agents(date, city, num_divisions, desired_temperature):
     fridge_agent.add_behaviour(FridgeAgent.FridgeBehaviour())
     aircon_agent.add_behaviour(AirconAgent.AirconBehaviour())
     washing_agent.add_behaviour(WashingMachineAgent.WashingMachineBehaviour())
+    charger_ev_agent.add_behaviour(CarChargerAgent.CarChargerBehaviour())
     #print("[DEBUG] WashingMachineBehaviour foi adicionado ao WashingMachineAgent.")
     #windows_agent.add_behaviour(WindowAgent.WindowBehaviour())
 
@@ -66,9 +68,9 @@ async def start_agents(date, city, num_divisions, desired_temperature):
     await fridge_agent.start()
     await solar_agent.start()
     await washing_agent.start()
+    await charger_ev_agent.start()
     await system_state.start()
-    #await car_charger_agent.start()
-    
+
     print("[DEBUG] Todos os agentes foram iniciados.")
 
     # Controla o tempo de execução do sistema
@@ -84,7 +86,8 @@ async def start_agents(date, city, num_divisions, desired_temperature):
             await fridge_agent.stop()
             await system_state.stop()
             await washing_agent.stop()
+            await charger_ev_agent.stop()
             await solar_agent.stop()
-            #await car_charger_agent.stop()
+
             break
         await asyncio.sleep(1)  # Pausa para simulação

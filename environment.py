@@ -24,9 +24,7 @@ class EnvironmentAgent(Agent):
                 if msg.metadata and "type" in msg.metadata:
                     if msg.metadata["type"] == "energy_price_update":
                         price = self.agent.get_price_for_current_hour()
-                        print(self.agent.date)
                         self.agent.date += pd.Timedelta(hours=1)
-                        print(self.agent.date)
                         response.body = str(price)
                         response.set_metadata("type", "energy_price")
                     elif msg.metadata["type"] == "preference_update":

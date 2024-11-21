@@ -7,5 +7,7 @@ from .heater import HeaterAgent
 from .solar_panel import SolarPanelAgent
 from .solar_battery import SolarBattery
 from .system_state import SystemState
+from .charger_EV import CarChargerAgent
+
 from environment import EnvironmentAgent
-__all__ = [ "FridgeAgent", "HeaterAgent", "SolarPanelAgent", "SolarBattery","SystemState","EnvironmentAgent","WashingMachineAgent","WindowAgent", "AirconAgent"]
+__all__ = [ "FridgeAgent", "HeaterAgent", "SolarPanelAgent", "SolarBattery","SystemState","EnvironmentAgent","WashingMachineAgent","WindowAgent", "AirconAgent", "CarChargerAgent"]
